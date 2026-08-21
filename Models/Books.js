@@ -11,10 +11,8 @@ const BookSchema = new mongoose.Schema(
     },
     author: {
       type: mongoose.Schema.Types.ObjectId,
-      minlength: 5,
-      maxlength: 20,
-      ref: "Author",
       required: true,
+      ref: "Author",
     },
     price: {
       type: Number,
@@ -27,7 +25,7 @@ const BookSchema = new mongoose.Schema(
 function validateBook(book) {
   const schema = joi.object({
     title: joi.string().min(3).max(20).required(),
-    author: joi.string().min(5).max(20).required(),
+    author: joi.required(),
     price: joi.number().min(0).required(),
   });
   const { error } = schema.validate(book);
@@ -37,7 +35,7 @@ function validateBook(book) {
 function validateUpdateBook(book) {
   const schema = joi.object({
     title: joi.string().min(3).max(20),
-    author: joi.string().min(5).max(20),
+    author: joi.required(),
     price: joi.number().min(0),
   });
   const { error } = schema.validate(book);

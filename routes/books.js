@@ -18,7 +18,11 @@ router.use(express.json());
 router.get(
   "/",
   asyncHandler(async (req, res) => {
-    const booksList = await Book.find();
+    const booksList = await Book.find().populate("author", [
+      "_id",
+      "FirstName",
+      "LastName",
+    ]);
     res.status(200).json(booksList);
   }),
 );
@@ -32,7 +36,7 @@ router.get(
   asyncHandler(async (req, res) => {
     console.log("the request is", req);
     console.log("the params is ", req.params);
-    const book = await Book.findById(req.params.id);
+    const book = await Book.findById(req.params.id).populate("author");
     if (book) {
       res.status(200).json(book);
     } else {
