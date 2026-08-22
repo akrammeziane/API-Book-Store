@@ -64,8 +64,8 @@ router.post(
       author: req.body.author,
       price: req.body.price,
     });
-    book.save();
-    res.status(201).json(book);
+    const result = await book.save();
+    res.status(201).json(result);
   }),
 );
 

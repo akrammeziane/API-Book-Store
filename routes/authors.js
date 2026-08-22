@@ -59,7 +59,11 @@ router.get(
   "/:id",
   asyncHandler(async (req, res) => {
     const author = await Author.findById(req.params.id);
-    res.status(200).json(author);
+    if (author) {
+      res.status(200).json(author);
+    } else {
+      res.status(404).json({ message: "author not found" });
+    }
   }),
 );
 
