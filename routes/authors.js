@@ -1,6 +1,7 @@
 const express = require("express");
 const router = express.Router();
 const asyncHandler = require("express-async-handler");
+const { verifyAdmin } = require("../middlewares/verifytoken");
 
 const {
   Author,
@@ -70,10 +71,11 @@ router.get(
 /**
  * @desc Create a new author
  * @route POST /api/authors
- * @access Public
+ * @access Private(only admin)
  */
 router.post(
   "/",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     console.log(req.body);
 
@@ -96,10 +98,11 @@ router.post(
 /**
  * @desc Edit an author by ID
  * @route PUT /api/authors/:id
- * @access Public
+ * @access Private (only admin)
  */
 router.put(
   "/:id",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     const error = validateUpdateAuthor(req.body);
     if (error) {
@@ -125,10 +128,11 @@ router.put(
 /**
  * @desc Delete an author by ID
  * @route DELETE /api/authors/:id
- * @access Public
+ * @access Private(ony admin)
  */
 router.delete(
   "/:id",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     const author = await Author.findById(req.params.id);
     if (author) {

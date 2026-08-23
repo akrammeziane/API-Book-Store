@@ -37,7 +37,6 @@ function ValidateUser(User) {
     Email: joi.string().min(5).max(100).trim().required().email(),
     UserName: joi.string().min(3).max(100).trim().required(),
     Password: joi.string().min(4).max(1000).trim().required(),
-    isAdmin: joi.bool(),
   });
   const { error } = schema.validate(User);
   return error;
@@ -47,7 +46,6 @@ function ValidateUpdateUser(User) {
     Email: joi.string().min(5).trim().max(100),
     UserName: joi.string().min(3).max(100).trim(),
     Password: joi.string().min(4).max(1000).trim(),
-    isAdmin: joi.bool(),
   });
   const { error } = schema.validate(User);
   return error;
