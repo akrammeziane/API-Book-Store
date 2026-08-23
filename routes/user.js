@@ -21,7 +21,7 @@ router.get(
   "/",
   verifyAdmin,
   asyncHandler(async (req, res) => {
-    const UserList = await User.find();
+    const UserList = await User.find().select("-Password");
     res.status(200).json(UserList);
   }),
 );
@@ -35,7 +35,7 @@ router.get(
   "/:id",
   verifyAuthAndAdmin,
   asyncHandler(async (req, res) => {
-    const user = await User.findById(req.params.id);
+    const user = await User.findById(req.params.id).select("-Password");
     if (user) {
       res.status(200).json(user);
     } else {

@@ -1,32 +1,27 @@
+// WORKING WITH EXPRESSJS
 const express = require("express");
-const booksRouter = require("./routes/books");
-const authorsRouter = require("./routes/authors");
-const UserRouter = require("./routes/user");
-const authpath = require("./routes/auth");
-const moongoose = require("mongoose");
-const logger = require("./middlewares/logger");
-
 const app = express();
-const dotenv = require("dotenv");
+// CALLING THE MIDDLEWARES
 const { notFound, errorhandler } = require("./middlewares/errors");
-dotenv.config();
+const logger = require("./middlewares/logger");
+// CONNECTING TO DP
+const connectToDB = require("./config/db");
+// WORKING WITH .ENV
+require("dotenv").config();
+
 // connecting to data base
-moongoose
-  .connect(process.env.MONGODP_URI, {
-    serverSelectionTimeoutMS: 5000,
-  })
-  .then(() => {
-    console.log("Connected to MongoDB");
-  })
-  .catch((err) => {
-    console.log("Error connecting to MongoDB", err);
-  });
-// app.use(logger);
+
+connectToDB();
+
+// LOGGER
+
+app.use(logger);
+
 // Routes
-app.use("/api/auth", authpath);
-app.use("/api/books", booksRouter);
-app.use("/api/authors", authorsRouter);
-app.use("/api/users", UserRouter);
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/books", require("./routes/books"));
+app.use("/api/authors", require("./routes/authors"));
+app.use("/api/users", require("./routes/user"));
 
 // middlewares
 app.use(notFound);

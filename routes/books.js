@@ -3,6 +3,7 @@ const joi = require("joi");
 const router = express.Router();
 const asyncHandler = require("express-async-handler");
 const { Book, validateBook, validateUpdateBook } = require("../Models/Books");
+const { verifyAdmin } = require("../middlewares/verifytoken");
 // const books = [
 //   { id: 1, title: "Book 1", author: "Author 1", price: 10.99 },
 //   { id: 2, title: "Book 2", author: "Author 2", price: 12.99 },
@@ -48,10 +49,11 @@ router.get(
 /**
  * @desc Create a new book
  * @route POST /api/books
- * @access Public
+ * @access Private(only admin)
  */
 router.post(
   "/",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     console.log(req.body);
 
@@ -72,10 +74,11 @@ router.post(
 /**
  * @desc Edit a book by ID
  * @route PUT /api/books/:id
- * @access Public
+ * @access Private(only admin)
  */
 router.put(
   "/:id",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     const error = validateUpdateBook(req.body);
     if (error) {
@@ -99,10 +102,11 @@ router.put(
 /**
  * @desc delete a book by ID
  * @route DELETE /api/books/:id
- * @access Public
+ * @access Private (only admin)
  */
 router.delete(
   "/:id",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     const book = await Book.findById(req.params.id);
     if (book) {

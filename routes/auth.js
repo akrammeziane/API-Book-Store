@@ -3,7 +3,6 @@ const router = express.Router();
 const asyncHandler = require("express-async-handler");
 const { User, ValidateUser, ValidateLogin } = require("../Models/User");
 const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 router.use(express.json());
 
 /**
@@ -32,12 +31,9 @@ router.post(
     });
 
     const result = await newUser.save();
-    // const token = null;
+
     const { Password, ...others } = result._doc;
-    const token = jwt.sign(
-      { id: newUser._id, UserName: newUser.UserName, isAdmin: newUser.isAdmin },
-      `${process.env.JWT_TOKEN}`,
-    );
+    const token = newUser.genTokens();
 
     res.status(201).json({ ...others, token });
   }),
@@ -67,10 +63,7 @@ router.post(
     }
 
     const { Password, ...others } = user._doc;
-    const token = jwt.sign(
-      { id: user._id, UserName: user.UserName, isAdmin: user.isAdmin },
-      process.env.JWT_TOKEN,
-    );
+    const token = user.genTokens();
 
     res.status(200).json({ ...others, token });
   }),
