@@ -14,7 +14,7 @@ const {
 
 const getAuthors = asyncHandler(async (req, res) => {
   // PAGINATION
-  const { PageNumber } = req.query;
+  const PageNumber = parseInt(req.query.PageNumber) || 1;
   const AuthorPerPage = 2;
   const skip = (PageNumber - 1) * AuthorPerPage;
   const authorlists = await Author.find().skip(skip).limit(AuthorPerPage);

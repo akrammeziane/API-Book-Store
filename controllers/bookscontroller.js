@@ -11,7 +11,7 @@ const getBooks = asyncHandler(async (req, res) => {
   let booksList = [];
   if (minPrice || maxPrice) {
     booksList = await Book.find({
-      price: { $gt: minPrice, $lt: maxPrice },
+      price: { $gt: parseFloat(minPrice), $lt: parseFloat(maxPrice) },
     }).populate("author", ["_id", "FirstName", "LastName"]);
   } else {
     booksList = await Book.find().populate("author", [

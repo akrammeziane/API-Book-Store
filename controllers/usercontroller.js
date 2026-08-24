@@ -78,7 +78,7 @@ const editUser = asyncHandler(async (req, res) => {
     },
     { new: true },
   ).select("-Password");
-  res.status(201).json(editedUser);
+  res.status(200).json(editedUser);
 });
 /**
  * @desc : delete an user by id
@@ -93,7 +93,7 @@ const deleteUser = asyncHandler(async (req, res) => {
       message: `User with name ${user.UserName} and id : ${req.params.id} deleted sucsessfully`,
     });
   } else {
-    res.status(400).json({ message: "User not found !" });
+    res.status(404).json({ message: "User not found !" });
   }
 });
 module.exports = {

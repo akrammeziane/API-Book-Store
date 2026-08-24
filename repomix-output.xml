@@ -42,6 +42,11 @@ The content is organized as follows:
 <directory_structure>
 config/
   db.js
+controllers/
+  authcontroller.js
+  authorscontroller.js
+  bookscontroller.js
+  usercontroller.js
 middlewares/
   errors.js
   logger.js
@@ -57,40 +62,420 @@ routes/
   user.js
 .gitignore
 app.js
+data.js
 package.json
+seeder.js
 </directory_structure>
 
 <files>
 This section contains the contents of the repository's files.
 
-<file path="config/db.js">
-const moongoose = require("mongoose");
+<file path="controllers/authcontroller.js">
+const asyncHandler = require("express-async-handler");
+const { User, ValidateUser, ValidateLogin } = require("../Models/User");
+const bcrypt = require("bcryptjs");
 
-const connectToDB = async () => {
-  try {
-    await moongoose.connect(process.env.MONGODP_URI, {
-      serverSelectionTimeoutMS: 5000,
-    });
-    console.log("Connected to MongoDB");
-  } catch (err) {
-    console.log("Error connecting to MongoDB", err);
+/**
+ * @desc : Add an user
+ * @route : Post /api/users/:id
+ * @access:Public
+ */
+
+const register = asyncHandler(async (req, res) => {
+  const error = ValidateUser(req.body);
+  if (error) {
+    return res.status(400).json(error.details[0].message);
   }
+  const user = await User.findOne({ Email: req.body.Email });
+  if (user) {
+    return res.status(400).json({ message: "User already exist" });
+  }
+  const salt = await bcrypt.genSalt(10);
+  const password = await bcrypt.hash(req.body.Password, salt);
+
+  const newUser = new User({
+    Email: req.body.Email,
+    UserName: req.body.UserName,
+    Password: password,
+  });
+
+  const result = await newUser.save();
+
+  const { Password, ...others } = result._doc;
+  const token = newUser.genTokens();
+
+  res.status(201).json({ ...others, token });
+});
+
+/**
+ * @desc : Login
+ * @route : Post /api/users/:id
+ * @access:Public
+ */
+
+const login = asyncHandler(async (req, res) => {
+  const error = ValidateLogin(req.body);
+  if (error) {
+    return res.status(400).json(error.details[0].message);
+  }
+  const user = await User.findOne({ Email: req.body.Email });
+  if (!user) {
+    return res.status(400).json({ message: "invalid email" });
+  }
+  const isMatchPassword = await bcrypt.compare(
+    req.body.Password,
+    user.Password,
+  );
+  if (!isMatchPassword) {
+    return res.status(400).json({ message: "invalid password" });
+  }
+
+  const { Password, ...others } = user._doc;
+  const token = user.genTokens();
+
+  res.status(200).json({ ...others, token });
+});
+
+module.exports = {
+  register,
+  login,
 };
+</file>
 
-module.exports = connectToDB;
+<file path="controllers/authorscontroller.js">
+const asyncHandler = require("express-async-handler");
 
-//OLD METHODE
+const {
+  Author,
+  validateAuthor,
+  validateUpdateAuthor,
+} = require("../Models/Authors");
 
-//  moongoose
-//   .connect(process.env.MONGODP_URI, {
-//     serverSelectionTimeoutMS: 5000,
+/**
+ * @desc Get all authors
+ * @route GET /api/authors
+ * @access Public
+ */
+
+const getAuthors = asyncHandler(async (req, res) => {
+  // PAGINATION
+  const { PageNumber } = req.query;
+  const AuthorPerPage = 2;
+  const skip = (PageNumber - 1) * AuthorPerPage;
+  const authorlists = await Author.find().skip(skip).limit(AuthorPerPage);
+  // .sort({ FirstName: -1 })
+  // .select("FirstName LastName -_id");
+  res.status(200).json(authorlists);
+});
+
+/**
+ * @desc Get author by ID
+ * @route GET /api/authors/:id
+ * @access Public
+ */
+
+const getAuthorById = asyncHandler(async (req, res) => {
+  const author = await Author.findById(req.params.id);
+  if (author) {
+    res.status(200).json(author);
+  } else {
+    res.status(404).json({ message: "author not found" });
+  }
+});
+/**
+ * @desc Create a new author
+ * @route POST /api/authors
+ * @access Private(only admin)
+ */
+
+const addAuthor = asyncHandler(async (req, res) => {
+  console.log(req.body);
+
+  const error = validateAuthor(req.body);
+  if (error) {
+    return res.status(400).send(error.details[0].message);
+  }
+  const author = new Author({
+    FirstName: req.body.FirstName,
+    LastName: req.body.LastName,
+    age: req.body.age,
+    nationality: req.body.nationality,
+    image: req.body.image,
+  });
+  const result = await author.save();
+  return res.status(201).json(result);
+});
+
+/**
+ * @desc Edit an author by ID
+ * @route PUT /api/authors/:id
+ * @access Private (only admin)
+ */
+
+const editAuthor = asyncHandler(async (req, res) => {
+  const error = validateUpdateAuthor(req.body);
+  if (error) {
+    return res.status(400).send(error.details[0].message);
+  }
+  const author = await Author.findByIdAndUpdate(
+    req.params.id,
+    {
+      $set: {
+        FirstName: req.body.FirstName,
+        LastName: req.body.LastName,
+        age: req.body.age,
+        nationality: req.body.nationality,
+        image: req.body.image,
+      },
+    },
+    { new: true },
+  );
+  res.status(200).json(author);
+});
+
+/**
+ * @desc Delete an author by ID
+ * @route DELETE /api/authors/:id
+ * @access Private(ony admin)
+ */
+
+const deleteAuthor = asyncHandler(async (req, res) => {
+  const author = await Author.findById(req.params.id);
+  if (author) {
+    await Author.findByIdAndDelete(req.params.id);
+    res.status(200).json({ message: "Author deleted successfully" });
+  } else {
+    res.status(404).json({ message: "Author not found" });
+  }
+});
+module.exports = {
+  getAuthors,
+  getAuthorById,
+  addAuthor,
+  editAuthor,
+  deleteAuthor,
+};
+</file>
+
+<file path="controllers/bookscontroller.js">
+const asyncHandler = require("express-async-handler");
+const { Book, validateBook, validateUpdateBook } = require("../Models/Books");
+
+/**
+ * @desc Get all books
+ * @route GET /api/books
+ * @access Public
+ */
+const getBooks = asyncHandler(async (req, res) => {
+  const { minPrice, maxPrice } = req.query;
+  let booksList = [];
+  if (minPrice || maxPrice) {
+    booksList = await Book.find({
+      price: { $gt: minPrice, $lt: maxPrice },
+    }).populate("author", ["_id", "FirstName", "LastName"]);
+  } else {
+    booksList = await Book.find().populate("author", [
+      "_id",
+      "FirstName",
+      "LastName",
+    ]);
+  }
+  res.status(200).json(booksList);
+});
+
+/**
+ * @desc Get books by ID
+ * @route GET /api/books/:id
+ * @access Public
+ */
+
+const getBookById = asyncHandler(async (req, res) => {
+  console.log("the request is", req);
+  console.log("the params is ", req.params);
+  const book = await Book.findById(req.params.id).populate("author");
+  if (book) {
+    res.status(200).json(book);
+  } else {
+    res.status(404).send("Book not found");
+  }
+});
+
+/**
+ * @desc Create a new book
+ * @route POST /api/books
+ * @access Private(only admin)
+ */
+
+const addBook = asyncHandler(async (req, res) => {
+  console.log(req.body);
+
+  const error = validateBook(req.body);
+  if (error) {
+    return res.status(400).send(error.details[0].message);
+  }
+  const book = new Book({
+    title: req.body.title,
+    author: req.body.author,
+    price: req.body.price,
+  });
+  const result = await book.save();
+  res.status(201).json(result);
+});
+
+/**
+ * @desc Edit a book by ID
+ * @route PUT /api/books/:id
+ * @access Private(only admin)
+ */
+const editBook = asyncHandler(async (req, res) => {
+  const error = validateUpdateBook(req.body);
+  if (error) {
+    return res.status(400).send(error.details[0].message);
+  }
+  const book = await Book.findByIdAndUpdate(
+    req.params.id,
+    {
+      $set: {
+        title: req.body.title,
+        author: req.body.author,
+        price: req.body.price,
+      },
+    },
+    { new: true },
+  );
+  console.log("the book is ", book);
+  res.status(200).json(book);
+});
+
+/**
+ * @desc delete a book by ID
+ * @route DELETE /api/books/:id
+ * @access Private (only admin)
+ */
+
+const deleteBook = asyncHandler(async (req, res) => {
+  const book = await Book.findById(req.params.id);
+  if (book) {
+    await Book.findByIdAndDelete(req.params.id);
+    res.status(200).send("Book deleted successfully");
+  } else {
+    res.status(404).send("Book not found");
+  }
+});
+module.exports = {
+  getBooks,
+  getBookById,
+  addBook,
+  editBook,
+  deleteBook,
+};
+</file>
+
+<file path="controllers/usercontroller.js">
+const asyncHandler = require("express-async-handler");
+const {
+  User,
+  ValidateUser,
+  ValidateUpdateUser,
+  ValidateLogin,
+} = require("../Models/User");
+
+/**
+ * @desc : Get All Users
+ * @route : GET /api/users
+ * @access:Private(only for admin)
+ */
+const getUsers = asyncHandler(async (req, res) => {
+  const UserList = await User.find().select("-Password");
+  res.status(200).json(UserList);
+});
+
+/**
+ * @desc : Get Users By ID
+ * @route : GET /api/users/:id
+ * @access:Private(only for admin and current user)
+ */
+
+const getUserById = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id).select("-Password");
+  if (user) {
+    res.status(200).json(user);
+  } else {
+    res.status(404).json({ message: "user not found" });
+  }
+});
+
+/**
+ * @desc : Add an user
+ * @route : Post /api/users/:id
+ * @access:Public
+ */
+// const addUser=()=>{
+//     asyncHandler(async (req, res) => {
+//     console.log(req.body);
+//     console.log(req.params);
+//     const error = ValidateUser(req.body);
+//     if (error) {
+//       return res.status(400).json(error.details[0].message);
+//     }
+//     const newUser = new User({
+//       Email: req.body.Email,
+//       UserName: req.body.UserName,
+//       Password: req.body.Password,
+//       isAdmin: req.body.isAdmin,
+//     });
+//     const result = await newUser.save();
+//     res.status(201).json(result);
 //   })
-//   .then(() => {
-//     console.log("Connected to MongoDB");
-//   })
-//   .catch((err) => {
-//     console.log("Error connecting to MongoDB", err);
-//   });
+// }
+
+/**
+ * @desc : edit an user by id
+ * @route : Put /api/users/:id
+ * @access:Private(only for admin and current user)
+ */
+
+const editUser = asyncHandler(async (req, res) => {
+  const error = ValidateUpdateUser(req.body);
+  if (error) {
+    return res.status(400).json(error.details[0].message);
+  }
+  const editedUser = await User.findByIdAndUpdate(
+    req.params.id,
+    {
+      $set: {
+        Email: req.body.Email,
+        UserName: req.body.UserName,
+        Password: req.body.Password,
+        isAdmin: req.body.isAdmin,
+      },
+    },
+    { new: true },
+  ).select("-Password");
+  res.status(201).json(editedUser);
+});
+/**
+ * @desc : delete an user by id
+ * @route : Delete /api/users/:id
+ * @access:Private(only for admin and current user)
+ */
+const deleteUser = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (user) {
+    await User.findByIdAndDelete(req.params.id);
+    res.status(200).json({
+      message: `User with name ${user.UserName} and id : ${req.params.id} deleted sucsessfully`,
+    });
+  } else {
+    res.status(400).json({ message: "User not found !" });
+  }
+});
+module.exports = {
+  getUsers,
+  getUserById,
+  editUser,
+  deleteUser,
+};
 </file>
 
 <file path="middlewares/errors.js">
@@ -120,55 +505,6 @@ const logger = (req, res, next) => {
   next();
 };
 module.exports = logger;
-</file>
-
-<file path="middlewares/verifytoken.js">
-const jwt = require("jsonwebtoken");
-//VERIFY TOKEN
-
-const verifytoken = (req, res, next) => {
-  const token = req.headers.token;
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, process.env.JWT_TOKEN);
-      console.log(decoded);
-      req.user = decoded;
-      next();
-    } catch (error) {
-      console.log(error);
-      res.status(401).json({ message: "invalid token" });
-    }
-  } else {
-    res.status(401).json({ message: "token not found " });
-  }
-};
-
-//VERIFY TOKEN AND AUTHORIZATION
-
-const verifyAuthAndAdmin = (req, res, next) => {
-  verifytoken(req, res, () => {
-    if (req.user.id === req.params.id || req.user.isAdmin) {
-      next();
-    } else {
-      return res.status(403).json({ message: "you're not allowed to do that" });
-    }
-  });
-};
-
-// VERIFY TOKEN AND ADMIN
-
-const verifyAdmin = (req, res, next) => {
-  verifytoken(req, res, () => {
-    console.log(req.user.isAdmin);
-    if (req.user.isAdmin) {
-      next();
-    } else {
-      return res.status(403).json({ message: "you're not allowed to do that" });
-    }
-  });
-};
-
-module.exports = { verifyAuthAndAdmin, verifyAdmin };
 </file>
 
 <file path="Models/Authors.js">
@@ -245,6 +581,215 @@ node_modules/
 .DS_Store
 </file>
 
+<file path="data.js">
+const books = [
+  {
+    title: "Matehmatics book",
+    author: "6a87815882dc867696ff3062",
+    price: 10,
+  },
+  {
+    title: "Arabic book",
+    author: "6a87815882dc867696ff3062",
+    price: 9,
+  },
+  {
+    title: "English Book",
+    author: "6a87815882dc867696ff3062",
+    price: 13,
+  },
+  {
+    title: "French Book",
+    author: "6a87815882dc867696ff3062",
+    price: 7,
+  },
+  {
+    title: "Pholosophie book",
+    author: "6a87816982dc867696ff3063",
+    price: 18,
+  },
+  {
+    title: "Islamique book",
+    author: "6a87816982dc867696ff3063",
+    price: 5,
+  },
+  {
+    title: "Science book",
+    author: "6a87816982dc867696ff3063",
+    price: 10,
+  },
+  {
+    title: "informatique book",
+    author: "6a87816982dc867696ff3063",
+    price: 11,
+  },
+];
+const authors = [
+  {
+    FirstName: "Robert",
+    LastName: "Kiyosaki",
+    age: 45,
+    nationality: "USA",
+  },
+  {
+    FirstName: "Paulo",
+    LastName: "Coelho",
+    age: 50,
+    nationality: "Brazil",
+  },
+  {
+    FirstName: "Wayne",
+    LastName: "Dyer",
+    age: 55,
+    nationality: "USA",
+  },
+  {
+    FirstName: "Rolf",
+    LastName: "Dobelli",
+    age: 60,
+    nationality: "Switzerland",
+  },
+];
+module.exports = { books, authors };
+</file>
+
+<file path="seeder.js">
+const { Book } = require("./Models/Books");
+const { Author } = require("./Models/Authors");
+const connectToDB = require("./config/db");
+const { books, authors } = require("./data");
+require("dotenv").config();
+
+connectToDB();
+/// MANAGING BOOKS
+const ImportBooks = async () => {
+  try {
+    await Book.insertMany(books);
+    console.log("books imported sucseccefully");
+  } catch (err) {
+    console.log(err);
+    process.exit(1);
+  }
+};
+const DeleteBooks = async () => {
+  try {
+    await Book.deleteMany();
+    console.log("books deleted sucseccefully");
+  } catch (err) {
+    console.log(err);
+    process.exit(1);
+  }
+};
+
+if (process.argv[2] === "import") {
+  ImportBooks();
+} else if (process.argv[2] === "delete") {
+  DeleteBooks();
+}
+/// MANAGING AUTHORS
+
+const ImportAuthors = async () => {
+  try {
+    await Author.insertMany(authors);
+    console.log("authors imported sucseccefully");
+  } catch (err) {
+    console.log(err);
+    process.exit(1);
+  }
+};
+const DeleteAuthors = async () => {
+  try {
+    await Author.deleteMany();
+    console.log("authors deleted sucseccefully");
+  } catch (err) {
+    console.log(err);
+    process.exit(1);
+  }
+};
+
+if (process.argv[2] === "import-authors") {
+  ImportAuthors();
+} else if (process.argv[2] === "delete-authors") {
+  DeleteAuthors();
+}
+</file>
+
+<file path="config/db.js">
+const moongoose = require("mongoose");
+
+const connectToDB = async () => {
+  try {
+    await moongoose.connect(process.env.MONGODB_URI, {
+      serverSelectionTimeoutMS: 5000,
+    });
+    console.log("Connected to MongoDB");
+  } catch (err) {
+    console.log("Error connecting to MongoDB", err);
+  }
+};
+
+module.exports = connectToDB;
+
+//OLD METHODE
+
+//  moongoose
+//   .connect(process.env.MONGODP_URI, {
+//     serverSelectionTimeoutMS: 5000,
+//   })
+//   .then(() => {
+//     console.log("Connected to MongoDB");
+//   })
+//   .catch((err) => {
+//     console.log("Error connecting to MongoDB", err);
+//   });
+</file>
+
+<file path="middlewares/verifytoken.js">
+const jwt = require("jsonwebtoken");
+//VERIFY TOKEN
+
+const verifytoken = (req, res, next) => {
+  const token = req.headers.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_TOKEN);
+      req.user = decoded;
+      next();
+    } catch (error) {
+      res.status(401).json({ message: "invalid token" });
+    }
+  } else {
+    res.status(401).json({ message: "token not found " });
+  }
+};
+
+//VERIFY TOKEN AND AUTHORIZATION
+
+const verifyAuthAndAdmin = (req, res, next) => {
+  verifytoken(req, res, () => {
+    if (req.user.id === req.params.id || req.user.isAdmin) {
+      next();
+    } else {
+      return res.status(403).json({ message: "you're not allowed to do that" });
+    }
+  });
+};
+
+// VERIFY TOKEN AND ADMIN
+
+const verifyAdmin = (req, res, next) => {
+  verifytoken(req, res, () => {
+    if (req.user.isAdmin) {
+      next();
+    } else {
+      return res.status(403).json({ message: "you're not allowed to do that" });
+    }
+  });
+};
+
+module.exports = { verifyAuthAndAdmin, verifyAdmin };
+</file>
+
 <file path="Models/Books.js">
 const mongoose = require("mongoose");
 const joi = require("joi");
@@ -295,6 +840,34 @@ const Book = mongoose.model("Book", BookSchema);
 module.exports = { Book, validateBook, validateUpdateBook };
 </file>
 
+<file path="package.json">
+{
+  "name": "book-store-api",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-async-handler": "^1.2.0",
+    "joi": "^18.0.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.9.3"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
+</file>
+
 <file path="Models/User.js">
 const mongoose = require("mongoose");
 const joi = require("joi");
@@ -334,6 +907,7 @@ userschema.methods.genTokens = function () {
   return jwt.sign(
     { id: this._id, UserName: this.UserName, isAdmin: this.isAdmin },
     `${process.env.JWT_TOKEN}`,
+    { expiresIn: "7d" },
   );
 };
 function ValidateUser(User) {
@@ -374,88 +948,24 @@ module.exports = {
 <file path="routes/auth.js">
 const express = require("express");
 const router = express.Router();
-const asyncHandler = require("express-async-handler");
-const { User, ValidateUser, ValidateLogin } = require("../Models/User");
-const bcrypt = require("bcryptjs");
-router.use(express.json());
+const { register, login } = require("../controllers/authcontroller");
 
-/**
- * @desc : Add an user
- * @route : Post /api/users/:id
- * @access:Public
- */
-router.post(
-  "/register",
-  asyncHandler(async (req, res) => {
-    const error = ValidateUser(req.body);
-    if (error) {
-      return res.status(400).json(error.details[0].message);
-    }
-    const user = await User.findOne({ Email: req.body.Email });
-    if (user) {
-      return res.status(400).json({ message: "User already exist" });
-    }
-    const salt = await bcrypt.genSalt(10);
-    const password = await bcrypt.hash(req.body.Password, salt);
-
-    const newUser = new User({
-      Email: req.body.Email,
-      UserName: req.body.UserName,
-      Password: password,
-    });
-
-    const result = await newUser.save();
-
-    const { Password, ...others } = result._doc;
-    const token = newUser.genTokens();
-
-    res.status(201).json({ ...others, token });
-  }),
-);
-/**
- * @desc : Login
- * @route : Post /api/users/:id
- * @access:Public
- */
-router.post(
-  "/login",
-  asyncHandler(async (req, res) => {
-    const error = ValidateLogin(req.body);
-    if (error) {
-      return res.status(400).json(error.details[0].message);
-    }
-    const user = await User.findOne({ Email: req.body.Email });
-    if (!user) {
-      return res.status(400).json({ message: "invalid email" });
-    }
-    const isMatchPassword = await bcrypt.compare(
-      req.body.Password,
-      user.Password,
-    );
-    if (!isMatchPassword) {
-      return res.status(400).json({ message: "invalid password" });
-    }
-
-    const { Password, ...others } = user._doc;
-    const token = user.genTokens();
-
-    res.status(200).json({ ...others, token });
-  }),
-);
+router.post("/register", register);
+router.post("/login", login);
 module.exports = router;
 </file>
 
 <file path="routes/authors.js">
 const express = require("express");
 const router = express.Router();
-const asyncHandler = require("express-async-handler");
 const { verifyAdmin } = require("../middlewares/verifytoken");
-
 const {
-  Author,
-  validateAuthor,
-  validateUpdateAuthor,
-} = require("../Models/Authors");
+  getAuthors,
+  getAuthorById,
+  addAuthor,
+  editAuthor,
+  deleteAuthor,
+} = require("../controllers/authorscontroller");
 // const authors = [
 //   {
 //     id: 1,
@@ -482,115 +992,13 @@ const {
 //   },
 // ];
 
-router.use(express.json());
+router.route("/").get(getAuthors).post(verifyAdmin, addAuthor);
 
-/**
- * @desc Get all authors
- * @route GET /api/authors
- * @access Public
- */
-router.get(
-  "/",
-  asyncHandler(async (req, res) => {
-    const authorlists = await Author.find();
-    // .sort({ FirstName: -1 })
-    // .select("FirstName LastName -_id");
-    res.status(200).json(authorlists);
-  }),
-);
-
-/**
- * @desc Get author by ID
- * @route GET /api/authors/:id
- * @access Public
- */
-router.get(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    const author = await Author.findById(req.params.id);
-    if (author) {
-      res.status(200).json(author);
-    } else {
-      res.status(404).json({ message: "author not found" });
-    }
-  }),
-);
-
-/**
- * @desc Create a new author
- * @route POST /api/authors
- * @access Private(only admin)
- */
-router.post(
-  "/",
-  verifyAdmin,
-  asyncHandler(async (req, res) => {
-    console.log(req.body);
-
-    const error = validateAuthor(req.body);
-    if (error) {
-      return res.status(400).send(error.details[0].message);
-    }
-    const author = new Author({
-      FirstName: req.body.FirstName,
-      LastName: req.body.LastName,
-      age: req.body.age,
-      nationality: req.body.nationality,
-      image: req.body.image,
-    });
-    const result = await author.save();
-    return res.status(201).json(result);
-  }),
-);
-
-/**
- * @desc Edit an author by ID
- * @route PUT /api/authors/:id
- * @access Private (only admin)
- */
-router.put(
-  "/:id",
-  verifyAdmin,
-  asyncHandler(async (req, res) => {
-    const error = validateUpdateAuthor(req.body);
-    if (error) {
-      return res.status(400).send(error.details[0].message);
-    }
-    const author = await Author.findByIdAndUpdate(
-      req.params.id,
-      {
-        $set: {
-          FirstName: req.body.FirstName,
-          LastName: req.body.LastName,
-          age: req.body.age,
-          nationality: req.body.nationality,
-          image: req.body.image,
-        },
-      },
-      { new: true },
-    );
-    res.status(200).json(author);
-  }),
-);
-
-/**
- * @desc Delete an author by ID
- * @route DELETE /api/authors/:id
- * @access Private(ony admin)
- */
-router.delete(
-  "/:id",
-  verifyAdmin,
-  asyncHandler(async (req, res) => {
-    const author = await Author.findById(req.params.id);
-    if (author) {
-      await Author.findByIdAndDelete(req.params.id);
-      res.status(200).json({ message: "Author deleted successfully" });
-    } else {
-      res.status(404).json({ message: "Author not found" });
-    }
-  }),
-);
+router
+  .route("/:id")
+  .get(getAuthorById)
+  .put(verifyAdmin, editAuthor)
+  .delete(verifyAdmin, deleteAuthor);
 
 module.exports = router;
 </file>
@@ -598,122 +1006,24 @@ module.exports = router;
 <file path="routes/user.js">
 const express = require("express");
 const router = express.Router();
-const asyncHandler = require("express-async-handler");
-router.use(express.json());
 const {
   verifyAuthAndAdmin,
   verifyAdmin,
 } = require("../middlewares/verifytoken");
 const {
-  User,
-  ValidateUser,
-  ValidateUpdateUser,
-  ValidateLogin,
-} = require("../Models/User");
-/**
- * @desc : Get All Users
- * @route : GET /api/users
- * @access:Private(only for admin)
- */
-router.get(
-  "/",
-  verifyAdmin,
-  asyncHandler(async (req, res) => {
-    const UserList = await User.find().select("-Password");
-    res.status(200).json(UserList);
-  }),
-);
+  getUsers,
+  getUserById,
+  editUser,
+  deleteUser,
+} = require("../controllers/usercontroller");
 
-/**
- * @desc : Get Users By ID
- * @route : GET /api/users/:id
- * @access:Private(only for admin and current user)
- */
-router.get(
-  "/:id",
-  verifyAuthAndAdmin,
-  asyncHandler(async (req, res) => {
-    const user = await User.findById(req.params.id).select("-Password");
-    if (user) {
-      res.status(200).json(user);
-    } else {
-      res.status(404).json({ message: "user not found" });
-    }
-  }),
-);
+router.route("/").get(getUsers);
 
-/**
- * @desc : Add an user
- * @route : Post /api/users/:id
- * @access:Public
- */
-// router.post(
-//   "/",
-//   asyncHandler(async (req, res) => {
-//     console.log(req.body);
-//     console.log(req.params);
-//     const error = ValidateUser(req.body);
-//     if (error) {
-//       return res.status(400).json(error.details[0].message);
-//     }
-//     const newUser = new User({
-//       Email: req.body.Email,
-//       UserName: req.body.UserName,
-//       Password: req.body.Password,
-//       isAdmin: req.body.isAdmin,
-//     });
-//     const result = await newUser.save();
-//     res.status(201).json(result);
-//   }),
-// );
-/**
- * @desc : delete an user by id
- * @route : Delete /api/users/:id
- * @access:Private(only for admin and current user)
- */
-router.delete(
-  "/:id",
-  verifyAuthAndAdmin,
-  asyncHandler(async (req, res) => {
-    const user = await User.findById(req.params.id);
-    if (user) {
-      await User.findByIdAndDelete(req.params.id);
-      res.status(200).json({
-        message: `User with name ${user.UserName} and id : ${req.params.id} deleted sucsessfully`,
-      });
-    } else {
-      res.status(400).json({ message: "User not found !" });
-    }
-  }),
-);
-/**
- * @desc : edit an user by id
- * @route : Put /api/users/:id
- * @access:Private(only for admin and current user)
- */
-router.put(
-  "/:id",
-  verifyAuthAndAdmin,
-  asyncHandler(async (req, res) => {
-    const error = ValidateUpdateUser(req.body);
-    if (error) {
-      return res.status(400).json(error.details[0].message);
-    }
-    const editedUser = await User.findByIdAndUpdate(
-      req.params.id,
-      {
-        $set: {
-          Email: req.body.Email,
-          UserName: req.body.UserName,
-          Password: req.body.Password,
-          isAdmin: req.body.isAdmin,
-        },
-      },
-      { new: true },
-    ).select("-Password");
-    res.status(201).json(editedUser);
-  }),
-);
+router
+  .route("/:id")
+  .get(verifyAdmin, getUserById)
+  .delete(verifyAuthAndAdmin, deleteUser)
+  .put(verifyAuthAndAdmin, editUser);
 
 module.exports = router;
 </file>
@@ -729,6 +1039,9 @@ const logger = require("./middlewares/logger");
 const connectToDB = require("./config/db");
 // WORKING WITH .ENV
 require("dotenv").config();
+
+// TRANSLATE THE REQUESTS TO JSON
+app.use(express.json());
 
 // connecting to data base
 
@@ -755,154 +1068,30 @@ app.listen(process.env.PORT, () => {
 });
 </file>
 
-<file path="package.json">
-{
-  "name": "book-store-api",
-  "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "",
-  "type": "commonjs",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon app.js"
-  },
-  "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "express-async-handler": "^1.2.0",
-    "joi": "^18.0.1",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.9.3"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.14"
-  }
-}
-</file>
-
 <file path="routes/books.js">
 const express = require("express");
-const joi = require("joi");
 const router = express.Router();
-const asyncHandler = require("express-async-handler");
-const { Book, validateBook, validateUpdateBook } = require("../Models/Books");
 const { verifyAdmin } = require("../middlewares/verifytoken");
+const {
+  getBooks,
+  getBookById,
+  addBook,
+  editBook,
+  deleteBook,
+} = require("../controllers/bookscontroller");
 // const books = [
 //   { id: 1, title: "Book 1", author: "Author 1", price: 10.99 },
 //   { id: 2, title: "Book 2", author: "Author 2", price: 12.99 },
 //   { id: 3, title: "Book 3", author: "Author 3", price: 15.99 },
 // ];
-router.use(express.json());
 
-/**
- * @desc Get all books
- * @route GET /api/books
- * @access Public
- */
-router.get(
-  "/",
-  asyncHandler(async (req, res) => {
-    const booksList = await Book.find().populate("author", [
-      "_id",
-      "FirstName",
-      "LastName",
-    ]);
-    res.status(200).json(booksList);
-  }),
-);
-/**
- * @desc Get books by ID
- * @route GET /api/books/:id
- * @access Public
- */
-router.get(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    console.log("the request is", req);
-    console.log("the params is ", req.params);
-    const book = await Book.findById(req.params.id).populate("author");
-    if (book) {
-      res.status(200).json(book);
-    } else {
-      res.status(404).send("Book not found");
-    }
-  }),
-);
+router.route("/").get(getBooks).post(verifyAdmin, addBook);
 
-/**
- * @desc Create a new book
- * @route POST /api/books
- * @access Private(only admin)
- */
-router.post(
-  "/",
-  verifyAdmin,
-  asyncHandler(async (req, res) => {
-    console.log(req.body);
-
-    const error = validateBook(req.body);
-    if (error) {
-      return res.status(400).send(error.details[0].message);
-    }
-    const book = new Book({
-      title: req.body.title,
-      author: req.body.author,
-      price: req.body.price,
-    });
-    const result = await book.save();
-    res.status(201).json(result);
-  }),
-);
-
-/**
- * @desc Edit a book by ID
- * @route PUT /api/books/:id
- * @access Private(only admin)
- */
-router.put(
-  "/:id",
-  verifyAdmin,
-  asyncHandler(async (req, res) => {
-    const error = validateUpdateBook(req.body);
-    if (error) {
-      return res.status(400).send(error.details[0].message);
-    }
-    const book = await Book.findByIdAndUpdate(
-      req.params.id,
-      {
-        $set: {
-          title: req.body.title,
-          author: req.body.author,
-          price: req.body.price,
-        },
-      },
-      { new: true },
-    );
-    console.log("the book is ", book);
-    res.status(200).json(book);
-  }),
-);
-/**
- * @desc delete a book by ID
- * @route DELETE /api/books/:id
- * @access Private (only admin)
- */
-router.delete(
-  "/:id",
-  verifyAdmin,
-  asyncHandler(async (req, res) => {
-    const book = await Book.findById(req.params.id);
-    if (book) {
-      await Book.findByIdAndDelete(req.params.id);
-      res.status(200).send("Book deleted successfully");
-    } else {
-      res.status(404).send("Book not found");
-    }
-  }),
-);
+router
+  .route("/:id")
+  .get(getBookById)
+  .put(verifyAdmin, editBook)
+  .delete(verifyAdmin, deleteBook);
 
 module.exports = router;
 </file>
