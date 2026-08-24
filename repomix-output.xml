@@ -40,9 +40,12 @@ The content is organized as follows:
 </file_summary>
 
 <directory_structure>
+config/
+  db.js
 middlewares/
   errors.js
   logger.js
+  verifytoken.js
 Models/
   Authors.js
   Books.js
@@ -59,6 +62,36 @@ package.json
 
 <files>
 This section contains the contents of the repository's files.
+
+<file path="config/db.js">
+const moongoose = require("mongoose");
+
+const connectToDB = async () => {
+  try {
+    await moongoose.connect(process.env.MONGODP_URI, {
+      serverSelectionTimeoutMS: 5000,
+    });
+    console.log("Connected to MongoDB");
+  } catch (err) {
+    console.log("Error connecting to MongoDB", err);
+  }
+};
+
+module.exports = connectToDB;
+
+//OLD METHODE
+
+//  moongoose
+//   .connect(process.env.MONGODP_URI, {
+//     serverSelectionTimeoutMS: 5000,
+//   })
+//   .then(() => {
+//     console.log("Connected to MongoDB");
+//   })
+//   .catch((err) => {
+//     console.log("Error connecting to MongoDB", err);
+//   });
+</file>
 
 <file path="middlewares/errors.js">
 const notFound = (req, res, next) => {
@@ -89,264 +122,53 @@ const logger = (req, res, next) => {
 module.exports = logger;
 </file>
 
-<file path="Models/User.js">
-const mongoose = require("mongoose");
-const joi = require("joi");
+<file path="middlewares/verifytoken.js">
+const jwt = require("jsonwebtoken");
+//VERIFY TOKEN
 
-const userschema = new mongoose.Schema(
-  {
-    Email: {
-      type: String,
-      minlength: 5,
-      maxlength: 200,
-      required: true,
-      trim: true,
-      unique: true,
-    },
-    UserName: {
-      type: String,
-      minlength: 3,
-      maxlength: 100,
-      required: true,
-      trim: true,
-    },
-    Password: {
-      type: String,
-      minlength: 4,
-      maxlength: 1000,
-      trim: true,
-      required: true,
-    },
-    isAdmin: {
-      type: Boolean,
-      default: false,
-    },
-  },
-  { timestamps: true },
-);
-function ValidateUser(User) {
-  const schema = joi.object({
-    Email: joi.string().min(5).max(100).trim().required().email(),
-    UserName: joi.string().min(3).max(100).trim().required(),
-    Password: joi.string().min(4).max(1000).trim().required(),
-    isAdmin: joi.bool(),
-  });
-  const { error } = schema.validate(User);
-  return error;
-}
-function ValidateUpdateUser(User) {
-  const schema = joi.object({
-    Email: joi.string().min(5).trim().max(100),
-    UserName: joi.string().min(3).max(100).trim(),
-    Password: joi.string().min(4).max(1000).trim(),
-    isAdmin: joi.bool(),
-  });
-  const { error } = schema.validate(User);
-  return error;
-}
-function ValidateLogin(User) {
-  const schema = joi.object({
-    Email: joi.string().min(5).max(100).trim(),
-    Password: joi.string().min(4).max(1000).trim(),
-  });
-  const { error } = schema.validate(User);
-  return error;
-}
-const User = mongoose.model("User", userschema);
-module.exports = {
-  User,
-  ValidateUser,
-  ValidateUpdateUser,
-  ValidateLogin,
+const verifytoken = (req, res, next) => {
+  const token = req.headers.token;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_TOKEN);
+      console.log(decoded);
+      req.user = decoded;
+      next();
+    } catch (error) {
+      console.log(error);
+      res.status(401).json({ message: "invalid token" });
+    }
+  } else {
+    res.status(401).json({ message: "token not found " });
+  }
 };
-</file>
 
-<file path="routes/auth.js">
-const express = require("express");
-const router = express.Router();
-const asyncHandler = require("express-async-handler");
-const { User, ValidateUser, ValidateLogin } = require("../Models/User");
-const bcrypt = require("bcryptjs");
-router.use(express.json());
+//VERIFY TOKEN AND AUTHORIZATION
 
-/**
- * @desc : Add an user
- * @route : Post /api/users/:id
- * @access:Public
- */
-router.post(
-  "/register",
-  asyncHandler(async (req, res) => {
-    const error = ValidateUser(req.body);
-    if (error) {
-      return res.status(400).json(error.details[0].message);
-    }
-    const user = await User.findOne({ Email: req.body.Email });
-    if (user) {
-      return res.status(400).json({ message: "User already exist" });
-    }
-    const salt = await bcrypt.genSalt(10);
-    const password = await bcrypt.hash(req.body.Password, salt);
-
-    const newUser = new User({
-      Email: req.body.Email,
-      UserName: req.body.UserName,
-      Password: password,
-      isAdmin: req.body.isAdmin,
-    });
-
-    const result = await newUser.save();
-    // const token = null;
-    const { Password, ...others } = result._doc;
-    const token = null;
-    console.log(others);
-
-    res.status(201).json({ ...others, token });
-  }),
-);
-/**
- * @desc : Login
- * @route : Post /api/users/:id
- * @access:Public
- */
-router.post(
-  "/login",
-  asyncHandler(async (req, res) => {
-    const error = ValidateLogin(req.body);
-    if (error) {
-      return res.status(400).json(error.details[0].message);
-    }
-    const user = await User.findOne({ Email: req.body.Email });
-    if (!user) {
-      return res.status(400).json({ message: "invalid email" });
-    }
-    const isMatchPassword = await bcrypt.compare(
-      req.body.Password,
-      user.Password,
-    );
-    if (!isMatchPassword) {
-      return res.status(400).json({ message: "invalid password" });
-    }
-
-    const { Password, ...others } = user._doc;
-
-    res.status(201).json({ ...others });
-  }),
-);
-module.exports = router;
-</file>
-
-<file path="routes/user.js">
-const express = require("express");
-const router = express.Router();
-const asyncHandler = require("express-async-handler");
-router.use(express.json());
-const {
-  User,
-  ValidateUser,
-  ValidateUpdateUser,
-  ValidateLogin,
-} = require("../Models/User");
-/**
- * @desc : Get All Users
- * @route : GET /api/users
- * @access:Public
- */
-router.get(
-  "/",
-  asyncHandler(async (req, res) => {
-    const UserList = await User.find();
-    res.status(200).json(UserList);
-  }),
-);
-
-/**
- * @desc : Get Users By ID
- * @route : GET /api/users/:id
- * @access:Public
- */
-router.get(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    const user = await User.findById(req.params.id);
-    res.status(200).json(user);
-  }),
-);
-
-/**
- * @desc : Add an user
- * @route : Post /api/users/:id
- * @access:Public
- */
-router.post(
-  "/",
-  asyncHandler(async (req, res) => {
-    console.log(req.body);
-    console.log(req.params);
-    const error = ValidateUser(req.body);
-    if (error) {
-      return res.status(400).json(error.details[0].message);
-    }
-    const newUser = new User({
-      Email: req.body.Email,
-      UserName: req.body.UserName,
-      Password: req.body.Password,
-      isAdmin: req.body.isAdmin,
-    });
-    const result = await newUser.save();
-    res.status(201).json(result);
-  }),
-);
-/**
- * @desc : delete an user by id
- * @route : Delete /api/users/:id
- * @access:Public
- */
-router.delete(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    const user = await User.findById(req.params.id);
-    if (user) {
-      await User.findByIdAndDelete(req.params.id);
-      console.log(req.params);
-      res.status(200).json({
-        message: `User with name ${user.UserName} and id : ${req.params.id} deleted sucsessfully`,
-      });
+const verifyAuthAndAdmin = (req, res, next) => {
+  verifytoken(req, res, () => {
+    if (req.user.id === req.params.id || req.user.isAdmin) {
+      next();
     } else {
-      res.status(400).json({ message: "User not found !" });
+      return res.status(403).json({ message: "you're not allowed to do that" });
     }
-  }),
-);
-/**
- * @desc : edit an user by id
- * @route : Put /api/users/:id
- * @access:Public
- */
-router.put(
-  "/:id",
-  asyncHandler(async (req, res) => {
-    console.log(req.body);
-    const error = ValidateUpdateUser(req.body);
-    if (error) {
-      return res.status(400).json(error.details[0].message);
-    }
-    const editedUser = await User.findByIdAndUpdate(
-      req.params.id,
-      {
-        $set: {
-          Email: req.body.Email,
-          UserName: req.body.UserName,
-          Password: req.body.Password,
-          isAdmin: req.body.isAdmin,
-        },
-      },
-      { new: true },
-    );
-    res.status(201).json(editedUser);
-  }),
-);
+  });
+};
 
-module.exports = router;
+// VERIFY TOKEN AND ADMIN
+
+const verifyAdmin = (req, res, next) => {
+  verifytoken(req, res, () => {
+    console.log(req.user.isAdmin);
+    if (req.user.isAdmin) {
+      next();
+    } else {
+      return res.status(403).json({ message: "you're not allowed to do that" });
+    }
+  });
+};
+
+module.exports = { verifyAuthAndAdmin, verifyAdmin };
 </file>
 
 <file path="Models/Authors.js">
@@ -417,10 +239,217 @@ const Author = mongoose.model("Author", Authorschema);
 module.exports = { Author, validateAuthor, validateUpdateAuthor };
 </file>
 
+<file path=".gitignore">
+node_modules/
+.env
+.DS_Store
+</file>
+
+<file path="Models/Books.js">
+const mongoose = require("mongoose");
+const joi = require("joi");
+
+const BookSchema = new mongoose.Schema(
+  {
+    title: {
+      type: String,
+      minlength: 3,
+      maxlength: 20,
+      required: true,
+    },
+    author: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+      ref: "Author",
+    },
+    price: {
+      type: Number,
+      min: 0,
+      required: true,
+    },
+  },
+  { timestamps: true },
+);
+function validateBook(book) {
+  const schema = joi.object({
+    title: joi.string().min(3).max(20).required(),
+    author: joi.required(),
+    price: joi.number().min(0).required(),
+  });
+  const { error } = schema.validate(book);
+  return error;
+}
+
+function validateUpdateBook(book) {
+  const schema = joi.object({
+    title: joi.string().min(3).max(20),
+    author: joi.required(),
+    price: joi.number().min(0),
+  });
+  const { error } = schema.validate(book);
+  return error;
+}
+
+const Book = mongoose.model("Book", BookSchema);
+
+module.exports = { Book, validateBook, validateUpdateBook };
+</file>
+
+<file path="Models/User.js">
+const mongoose = require("mongoose");
+const joi = require("joi");
+const jwt = require("jsonwebtoken");
+const userschema = new mongoose.Schema(
+  {
+    Email: {
+      type: String,
+      minlength: 5,
+      maxlength: 200,
+      required: true,
+      trim: true,
+      unique: true,
+    },
+    UserName: {
+      type: String,
+      minlength: 3,
+      maxlength: 100,
+      required: true,
+      trim: true,
+    },
+    Password: {
+      type: String,
+      minlength: 4,
+      maxlength: 1000,
+      trim: true,
+      required: true,
+    },
+    isAdmin: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { timestamps: true },
+);
+userschema.methods.genTokens = function () {
+  return jwt.sign(
+    { id: this._id, UserName: this.UserName, isAdmin: this.isAdmin },
+    `${process.env.JWT_TOKEN}`,
+  );
+};
+function ValidateUser(User) {
+  const schema = joi.object({
+    Email: joi.string().min(5).max(100).trim().required().email(),
+    UserName: joi.string().min(3).max(100).trim().required(),
+    Password: joi.string().min(4).max(1000).trim().required(),
+  });
+  const { error } = schema.validate(User);
+  return error;
+}
+function ValidateUpdateUser(User) {
+  const schema = joi.object({
+    Email: joi.string().min(5).trim().max(100),
+    UserName: joi.string().min(3).max(100).trim(),
+    Password: joi.string().min(4).max(1000).trim(),
+  });
+  const { error } = schema.validate(User);
+  return error;
+}
+function ValidateLogin(User) {
+  const schema = joi.object({
+    Email: joi.string().min(5).max(100).trim(),
+    Password: joi.string().min(4).max(1000).trim(),
+  });
+  const { error } = schema.validate(User);
+  return error;
+}
+const User = mongoose.model("User", userschema);
+module.exports = {
+  User,
+  ValidateUser,
+  ValidateUpdateUser,
+  ValidateLogin,
+};
+</file>
+
+<file path="routes/auth.js">
+const express = require("express");
+const router = express.Router();
+const asyncHandler = require("express-async-handler");
+const { User, ValidateUser, ValidateLogin } = require("../Models/User");
+const bcrypt = require("bcryptjs");
+router.use(express.json());
+
+/**
+ * @desc : Add an user
+ * @route : Post /api/users/:id
+ * @access:Public
+ */
+router.post(
+  "/register",
+  asyncHandler(async (req, res) => {
+    const error = ValidateUser(req.body);
+    if (error) {
+      return res.status(400).json(error.details[0].message);
+    }
+    const user = await User.findOne({ Email: req.body.Email });
+    if (user) {
+      return res.status(400).json({ message: "User already exist" });
+    }
+    const salt = await bcrypt.genSalt(10);
+    const password = await bcrypt.hash(req.body.Password, salt);
+
+    const newUser = new User({
+      Email: req.body.Email,
+      UserName: req.body.UserName,
+      Password: password,
+    });
+
+    const result = await newUser.save();
+
+    const { Password, ...others } = result._doc;
+    const token = newUser.genTokens();
+
+    res.status(201).json({ ...others, token });
+  }),
+);
+/**
+ * @desc : Login
+ * @route : Post /api/users/:id
+ * @access:Public
+ */
+router.post(
+  "/login",
+  asyncHandler(async (req, res) => {
+    const error = ValidateLogin(req.body);
+    if (error) {
+      return res.status(400).json(error.details[0].message);
+    }
+    const user = await User.findOne({ Email: req.body.Email });
+    if (!user) {
+      return res.status(400).json({ message: "invalid email" });
+    }
+    const isMatchPassword = await bcrypt.compare(
+      req.body.Password,
+      user.Password,
+    );
+    if (!isMatchPassword) {
+      return res.status(400).json({ message: "invalid password" });
+    }
+
+    const { Password, ...others } = user._doc;
+    const token = user.genTokens();
+
+    res.status(200).json({ ...others, token });
+  }),
+);
+module.exports = router;
+</file>
+
 <file path="routes/authors.js">
 const express = require("express");
 const router = express.Router();
 const asyncHandler = require("express-async-handler");
+const { verifyAdmin } = require("../middlewares/verifytoken");
 
 const {
   Author,
@@ -490,10 +519,11 @@ router.get(
 /**
  * @desc Create a new author
  * @route POST /api/authors
- * @access Public
+ * @access Private(only admin)
  */
 router.post(
   "/",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     console.log(req.body);
 
@@ -516,10 +546,11 @@ router.post(
 /**
  * @desc Edit an author by ID
  * @route PUT /api/authors/:id
- * @access Public
+ * @access Private (only admin)
  */
 router.put(
   "/:id",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     const error = validateUpdateAuthor(req.body);
     if (error) {
@@ -545,10 +576,11 @@ router.put(
 /**
  * @desc Delete an author by ID
  * @route DELETE /api/authors/:id
- * @access Public
+ * @access Private(ony admin)
  */
 router.delete(
   "/:id",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     const author = await Author.findById(req.params.id);
     if (author) {
@@ -563,42 +595,154 @@ router.delete(
 module.exports = router;
 </file>
 
-<file path=".gitignore">
-node_modules/
-.env
-.DS_Store
+<file path="routes/user.js">
+const express = require("express");
+const router = express.Router();
+const asyncHandler = require("express-async-handler");
+router.use(express.json());
+const {
+  verifyAuthAndAdmin,
+  verifyAdmin,
+} = require("../middlewares/verifytoken");
+const {
+  User,
+  ValidateUser,
+  ValidateUpdateUser,
+  ValidateLogin,
+} = require("../Models/User");
+/**
+ * @desc : Get All Users
+ * @route : GET /api/users
+ * @access:Private(only for admin)
+ */
+router.get(
+  "/",
+  verifyAdmin,
+  asyncHandler(async (req, res) => {
+    const UserList = await User.find().select("-Password");
+    res.status(200).json(UserList);
+  }),
+);
+
+/**
+ * @desc : Get Users By ID
+ * @route : GET /api/users/:id
+ * @access:Private(only for admin and current user)
+ */
+router.get(
+  "/:id",
+  verifyAuthAndAdmin,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.params.id).select("-Password");
+    if (user) {
+      res.status(200).json(user);
+    } else {
+      res.status(404).json({ message: "user not found" });
+    }
+  }),
+);
+
+/**
+ * @desc : Add an user
+ * @route : Post /api/users/:id
+ * @access:Public
+ */
+// router.post(
+//   "/",
+//   asyncHandler(async (req, res) => {
+//     console.log(req.body);
+//     console.log(req.params);
+//     const error = ValidateUser(req.body);
+//     if (error) {
+//       return res.status(400).json(error.details[0].message);
+//     }
+//     const newUser = new User({
+//       Email: req.body.Email,
+//       UserName: req.body.UserName,
+//       Password: req.body.Password,
+//       isAdmin: req.body.isAdmin,
+//     });
+//     const result = await newUser.save();
+//     res.status(201).json(result);
+//   }),
+// );
+/**
+ * @desc : delete an user by id
+ * @route : Delete /api/users/:id
+ * @access:Private(only for admin and current user)
+ */
+router.delete(
+  "/:id",
+  verifyAuthAndAdmin,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.params.id);
+    if (user) {
+      await User.findByIdAndDelete(req.params.id);
+      res.status(200).json({
+        message: `User with name ${user.UserName} and id : ${req.params.id} deleted sucsessfully`,
+      });
+    } else {
+      res.status(400).json({ message: "User not found !" });
+    }
+  }),
+);
+/**
+ * @desc : edit an user by id
+ * @route : Put /api/users/:id
+ * @access:Private(only for admin and current user)
+ */
+router.put(
+  "/:id",
+  verifyAuthAndAdmin,
+  asyncHandler(async (req, res) => {
+    const error = ValidateUpdateUser(req.body);
+    if (error) {
+      return res.status(400).json(error.details[0].message);
+    }
+    const editedUser = await User.findByIdAndUpdate(
+      req.params.id,
+      {
+        $set: {
+          Email: req.body.Email,
+          UserName: req.body.UserName,
+          Password: req.body.Password,
+          isAdmin: req.body.isAdmin,
+        },
+      },
+      { new: true },
+    ).select("-Password");
+    res.status(201).json(editedUser);
+  }),
+);
+
+module.exports = router;
 </file>
 
 <file path="app.js">
+// WORKING WITH EXPRESSJS
 const express = require("express");
-const booksRouter = require("./routes/books");
-const authorsRouter = require("./routes/authors");
-const UserRouter = require("./routes/user");
-const authpath = require("./routes/auth");
-const moongoose = require("mongoose");
-const logger = require("./middlewares/logger");
-
 const app = express();
-const dotenv = require("dotenv");
+// CALLING THE MIDDLEWARES
 const { notFound, errorhandler } = require("./middlewares/errors");
-dotenv.config();
+const logger = require("./middlewares/logger");
+// CONNECTING TO DP
+const connectToDB = require("./config/db");
+// WORKING WITH .ENV
+require("dotenv").config();
+
 // connecting to data base
-moongoose
-  .connect(process.env.MONGODP_URI, {
-    serverSelectionTimeoutMS: 5000,
-  })
-  .then(() => {
-    console.log("Connected to MongoDB");
-  })
-  .catch((err) => {
-    console.log("Error connecting to MongoDB", err);
-  });
-// app.use(logger);
+
+connectToDB();
+
+// LOGGER
+
+app.use(logger);
+
 // Routes
-app.use("/api/auth", authpath);
-app.use("/api/books", booksRouter);
-app.use("/api/authors", authorsRouter);
-app.use("/api/users", UserRouter);
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/books", require("./routes/books"));
+app.use("/api/authors", require("./routes/authors"));
+app.use("/api/users", require("./routes/user"));
 
 // middlewares
 app.use(notFound);
@@ -630,6 +774,7 @@ app.listen(process.env.PORT, () => {
     "express": "^5.2.1",
     "express-async-handler": "^1.2.0",
     "joi": "^18.0.1",
+    "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.9.3"
   },
   "devDependencies": {
@@ -638,62 +783,13 @@ app.listen(process.env.PORT, () => {
 }
 </file>
 
-<file path="Models/Books.js">
-const mongoose = require("mongoose");
-const joi = require("joi");
-
-const BookSchema = new mongoose.Schema(
-  {
-    title: {
-      type: String,
-      minlength: 3,
-      maxlength: 20,
-      required: true,
-    },
-    author: {
-      type: mongoose.Schema.Types.ObjectId,
-      required: true,
-      ref: "Author",
-    },
-    price: {
-      type: Number,
-      min: 0,
-      required: true,
-    },
-  },
-  { timestamps: true },
-);
-function validateBook(book) {
-  const schema = joi.object({
-    title: joi.string().min(3).max(20).required(),
-    author: joi.required(),
-    price: joi.number().min(0).required(),
-  });
-  const { error } = schema.validate(book);
-  return error;
-}
-
-function validateUpdateBook(book) {
-  const schema = joi.object({
-    title: joi.string().min(3).max(20),
-    author: joi.required(),
-    price: joi.number().min(0),
-  });
-  const { error } = schema.validate(book);
-  return error;
-}
-
-const Book = mongoose.model("Book", BookSchema);
-
-module.exports = { Book, validateBook, validateUpdateBook };
-</file>
-
 <file path="routes/books.js">
 const express = require("express");
 const joi = require("joi");
 const router = express.Router();
 const asyncHandler = require("express-async-handler");
 const { Book, validateBook, validateUpdateBook } = require("../Models/Books");
+const { verifyAdmin } = require("../middlewares/verifytoken");
 // const books = [
 //   { id: 1, title: "Book 1", author: "Author 1", price: 10.99 },
 //   { id: 2, title: "Book 2", author: "Author 2", price: 12.99 },
@@ -739,10 +835,11 @@ router.get(
 /**
  * @desc Create a new book
  * @route POST /api/books
- * @access Public
+ * @access Private(only admin)
  */
 router.post(
   "/",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     console.log(req.body);
 
@@ -763,10 +860,11 @@ router.post(
 /**
  * @desc Edit a book by ID
  * @route PUT /api/books/:id
- * @access Public
+ * @access Private(only admin)
  */
 router.put(
   "/:id",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     const error = validateUpdateBook(req.body);
     if (error) {
@@ -790,10 +888,11 @@ router.put(
 /**
  * @desc delete a book by ID
  * @route DELETE /api/books/:id
- * @access Public
+ * @access Private (only admin)
  */
 router.delete(
   "/:id",
+  verifyAdmin,
   asyncHandler(async (req, res) => {
     const book = await Book.findById(req.params.id);
     if (book) {

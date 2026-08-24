@@ -36,6 +36,7 @@ userschema.methods.genTokens = function () {
   return jwt.sign(
     { id: this._id, UserName: this.UserName, isAdmin: this.isAdmin },
     `${process.env.JWT_TOKEN}`,
+    { expiresIn: "7d" },
   );
 };
 function ValidateUser(User) {

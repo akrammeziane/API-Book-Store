@@ -6,11 +6,9 @@ const verifytoken = (req, res, next) => {
   if (token) {
     try {
       const decoded = jwt.verify(token, process.env.JWT_TOKEN);
-      console.log(decoded);
       req.user = decoded;
       next();
     } catch (error) {
-      console.log(error);
       res.status(401).json({ message: "invalid token" });
     }
   } else {
@@ -34,7 +32,6 @@ const verifyAuthAndAdmin = (req, res, next) => {
 
 const verifyAdmin = (req, res, next) => {
   verifytoken(req, res, () => {
-    console.log(req.user.isAdmin);
     if (req.user.isAdmin) {
       next();
     } else {

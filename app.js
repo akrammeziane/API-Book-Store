@@ -9,6 +9,9 @@ const connectToDB = require("./config/db");
 // WORKING WITH .ENV
 require("dotenv").config();
 
+// TRANSLATE THE REQUESTS TO JSON
+app.use(express.json());
+
 // connecting to data base
 
 connectToDB();
