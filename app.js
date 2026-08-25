@@ -1,14 +1,21 @@
 // WORKING WITH EXPRESSJS
 const express = require("express");
 const app = express();
+const helmet = require("helmet");
+const cors = require("cors");
 // CALLING THE MIDDLEWARES
 const { notFound, errorhandler } = require("./middlewares/errors");
 const logger = require("./middlewares/logger");
+// CALLING URL ENCODED FOR READING DATA FROM THE FORM
 app.use(express.urlencoded({ extended: false }));
 // CONNECTING TO DP
 const connectToDB = require("./config/db");
 // WORKING WITH .ENV
 require("dotenv").config();
+// HELMET
+app.use(helmet());
+// CORS POLICY
+app.use(cors());
 
 // TRANSLATE THE REQUESTS TO JSON
 app.use(express.json());

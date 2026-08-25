@@ -57,6 +57,8 @@ Models/
   Books.js
   User.js
 public/
+  2026-08-25T22:04:19.978ZCapture d’écran (53).png
+  Capture d’écran (53).png
   output.css
   styles.css
 routes/
@@ -64,6 +66,7 @@ routes/
   authors.js
   books.js
   password.js
+  upload.js
   user.js
 views/
   forgot-password.ejs
@@ -75,6 +78,7 @@ app.js
 data.js
 package.json
 seeder.js
+test.js
 </directory_structure>
 
 <files>
@@ -187,6 +191,31 @@ router
   .route("/reset-password/:id/:token")
   .get(getResetPasswordView)
   .post(resetPassword);
+
+module.exports = router;
+</file>
+
+<file path="routes/upload.js">
+const express = require("express");
+const router = express.Router();
+const multer = require("multer");
+
+const path = require("path");
+
+const storage = multer.diskStorage({
+  destination: (req, file, cp) => {
+    cp(null, path.join(__dirname, "../public"));
+  },
+  filename: (req, file, cp) => {
+    cp(null, new Date().toISOString() + file.originalname);
+  },
+});
+
+const upload = multer({ storage });
+
+router.post("/", upload.single("image"), (req, res) => {
+  res.status(200).json({ message: " image uploaded successefully" });
+});
 
 module.exports = router;
 </file>
@@ -448,6 +477,13 @@ if (process.argv[2] === "import-authors") {
 }
 </file>
 
+<file path="test.js">
+const path = require("path");
+const imagesPath = path.join(__dirname, "images");
+console.log(imagesPath);
+console.log(__dirname);
+</file>
+
 <file path="config/db.js">
 const moongoose = require("mongoose");
 
@@ -704,120 +740,6 @@ module.exports = {
   addBook,
   editBook,
   deleteBook,
-};
-</file>
-
-<file path="controllers/passwordController.js">
-const asyncHandler = require("express-async-handler");
-const { User } = require("../Models/User");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcryptjs");
-const nodemailer = require("nodemailer");
-require("dotenv").config();
-
-/**
- * @desc Get forgot password page
- * @route GET /password/forgot-password
- * @access Public
- */
-
-const getForgotPassword = asyncHandler((req, res) => {
-  return res.render("forgot-password");
-});
-
-/**
- * @desc send the new password
- * @route POST /password/forgot-password
- * @access Public
- */
-
-const sendPassword = asyncHandler(async (req, res) => {
-  const user = await User.findOne({ Email: req.body.email });
-  if (!user) {
-    return res.status(404).json({ message: "User not Found" });
-  }
-  const secret = process.env.JWT_TOKEN + user.Password;
-  const token = jwt.sign({ Email: user.Email, id: user.id }, secret, {
-    expiresIn: "10m",
-  });
-
-  const Link = `http://localhost:3000/password/reset-password/${user.id}/${token}`;
-
-  //   res.status(200).json({
-  //     message: "please follow the link to reset your password",
-  //     resetPasswordLink: Link,
-  //   });
-  const transporter = nodemailer.createTransport({
-    service: "gmail",
-    auth: {
-      user: process.env.USER_GMAIL,
-      pass: process.env.USER_PASS.replace(/\s+/g, ""),
-    },
-  });
-  const mailOptions = {
-    from: process.env.USER_GMAIL,
-    to: user.Email,
-    subject: "RESETING THE PASSWORD",
-    html: `<div>
-    <p>please following this link to reset your password </p>
-    <p>${Link}</p>
-    </div>`,
-  };
-  await transporter.sendMail(mailOptions);
-  res.render("Link-Page");
-});
-
-/**
- * @desc Get the reset password view
- * @route GET /password/reset-password
- * @access Public
- */
-
-const getResetPasswordView = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id);
-  if (!user) {
-    return res.status(404).json({ message: "User not Found" });
-  }
-  const secret = process.env.JWT_TOKEN + user.Password;
-  try {
-    jwt.verify(req.params.token, secret);
-    res.render("reset-password", { email: user.Email });
-  } catch (err) {
-    res.status(400).json({ message: "Error occcured" });
-  }
-});
-
-/**
- * @desc Seding the new password
- * @route POST /password/reset-password
- * @access Public
- */
-
-const resetPassword = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id);
-  if (!user) {
-    return res.status(404).json({ message: "User not Found" });
-  }
-  const secret = process.env.JWT_TOKEN + user.Password;
-  console.log("the password is ", req.body.password);
-  try {
-    jwt.verify(req.params.token, secret);
-    const salt = await bcrypt.genSalt(10);
-    const NewPassword = await bcrypt.hash(req.body.password, salt);
-    user.Password = NewPassword;
-    await user.save();
-    res.render("success-reset-password");
-  } catch (error) {
-    console.log(error);
-    res.status(400).json({ message: "Error" });
-  }
-});
-
-module.exports = {
-  getForgotPassword,
-  sendPassword,
-  getResetPasswordView,
-  resetPassword,
 };
 </file>
 
@@ -1108,80 +1030,128 @@ const Book = mongoose.model("Book", BookSchema);
 module.exports = { Book, validateBook, validateUpdateBook };
 </file>
 
-<file path="Models/User.js">
-const mongoose = require("mongoose");
-const joi = require("joi");
+<file path="controllers/passwordController.js">
+const asyncHandler = require("express-async-handler");
+const { User, ValidateChangePassword } = require("../Models/User");
 const jwt = require("jsonwebtoken");
-const userschema = new mongoose.Schema(
-  {
-    Email: {
-      type: String,
-      minlength: 5,
-      maxlength: 200,
-      required: true,
-      trim: true,
-      unique: true,
-    },
-    UserName: {
-      type: String,
-      minlength: 3,
-      maxlength: 100,
-      required: true,
-      trim: true,
-    },
-    Password: {
-      type: String,
-      minlength: 4,
-      maxlength: 1000,
-      trim: true,
-      required: true,
-    },
-    isAdmin: {
-      type: Boolean,
-      default: false,
-    },
-  },
-  { timestamps: true },
-);
-userschema.methods.genTokens = function () {
-  return jwt.sign(
-    { id: this._id, UserName: this.UserName, isAdmin: this.isAdmin },
-    `${process.env.JWT_TOKEN}`,
-    { expiresIn: "7d" },
-  );
-};
-function ValidateUser(User) {
-  const schema = joi.object({
-    Email: joi.string().min(5).max(100).trim().required().email(),
-    UserName: joi.string().min(3).max(100).trim().required(),
-    Password: joi.string().min(4).max(1000).trim().required(),
+const bcrypt = require("bcryptjs");
+const nodemailer = require("nodemailer");
+require("dotenv").config();
+
+/**
+ * @desc Get forgot password page
+ * @route GET /password/forgot-password
+ * @access Public
+ */
+
+const getForgotPassword = asyncHandler((req, res) => {
+  return res.render("forgot-password");
+});
+
+/**
+ * @desc send the new password
+ * @route POST /password/forgot-password
+ * @access Public
+ */
+
+const sendPassword = asyncHandler(async (req, res) => {
+  const user = await User.findOne({ Email: req.body.email });
+  if (!user) {
+    return res.status(404).json({ message: "User not Found" });
+  }
+  const secret = process.env.JWT_TOKEN + user.Password;
+  const token = jwt.sign({ Email: user.Email, id: user.id }, secret, {
+    expiresIn: "10m",
   });
-  const { error } = schema.validate(User);
-  return error;
-}
-function ValidateUpdateUser(User) {
-  const schema = joi.object({
-    Email: joi.string().min(5).trim().max(100),
-    UserName: joi.string().min(3).max(100).trim(),
-    Password: joi.string().min(4).max(1000).trim(),
+
+  const Link = `http://localhost:3000/password/reset-password/${user.id}/${token}`;
+
+  //   res.status(200).json({
+  //     message: "please follow the link to reset your password",
+  //     resetPasswordLink: Link,
+  //   });
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.USER_GMAIL,
+      pass: process.env.USER_PASS.replace(/\s+/g, ""),
+    },
   });
-  const { error } = schema.validate(User);
-  return error;
-}
-function ValidateLogin(User) {
-  const schema = joi.object({
-    Email: joi.string().min(5).max(100).trim(),
-    Password: joi.string().min(4).max(1000).trim(),
+  const mailOptions = {
+    from: process.env.USER_GMAIL,
+    to: user.Email,
+    subject: "RESETING THE PASSWORD",
+    html: `<div>
+    <p>please following this link to reset your password </p>
+    <p>${Link}</p>
+    </div>`,
+  };
+  await transporter.sendMail(mailOptions, (err, scc) => {
+    if (err) {
+      console.log(err);
+      res.status(500).json({ message: "operation failed" });
+    } else {
+      console.log("Email sent " + user.Email);
+      res.render("Link-Page");
+    }
   });
-  const { error } = schema.validate(User);
-  return error;
-}
-const User = mongoose.model("User", userschema);
+});
+
+/**
+ * @desc Get the reset password view
+ * @route GET /password/reset-password
+ * @access Public
+ */
+
+const getResetPasswordView = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return res.status(404).json({ message: "User not Found" });
+  }
+  const secret = process.env.JWT_TOKEN + user.Password;
+  try {
+    jwt.verify(req.params.token, secret);
+    res.render("reset-password", { email: user.Email });
+  } catch (err) {
+    res.status(400).json({ message: "Error occcured" });
+  }
+});
+
+/**
+ * @desc Seding the new password
+ * @route POST /password/reset-password
+ * @access Public
+ */
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const error = ValidateChangePassword(req.body);
+  if (error) {
+    return res.status(400).json({ message: error.details[0].message });
+  }
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return res.status(404).json({ message: "User not Found" });
+  }
+  const secret = process.env.JWT_TOKEN + user.Password;
+  console.log("the password is ", req.body.password);
+  try {
+    jwt.verify(req.params.token, secret);
+    const salt = await bcrypt.genSalt(10);
+    const NewPassword = await bcrypt.hash(req.body.password, salt);
+    user.Password = NewPassword;
+    await user.save();
+    res.render("success-reset-password");
+  } catch (error) {
+    console.log(error);
+    res.status(400).json({ message: "Error" });
+  }
+});
+
 module.exports = {
-  User,
-  ValidateUser,
-  ValidateUpdateUser,
-  ValidateLogin,
+  getForgotPassword,
+  sendPassword,
+  getResetPasswordView,
+  resetPassword,
 };
 </file>
 
@@ -1268,6 +1238,93 @@ router
 module.exports = router;
 </file>
 
+<file path="Models/User.js">
+const mongoose = require("mongoose");
+const joi = require("joi");
+const jwt = require("jsonwebtoken");
+const passwordComplexity = require("joi-password-complexity");
+const userschema = new mongoose.Schema(
+  {
+    Email: {
+      type: String,
+      minlength: 5,
+      maxlength: 200,
+      required: true,
+      trim: true,
+      unique: true,
+    },
+    UserName: {
+      type: String,
+      minlength: 3,
+      maxlength: 100,
+      required: true,
+      trim: true,
+    },
+    Password: {
+      type: String,
+      // minlength: 4,
+      // maxlength: 1000,
+      trim: true,
+      required: true,
+    },
+    isAdmin: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  { timestamps: true },
+);
+userschema.methods.genTokens = function () {
+  return jwt.sign(
+    { id: this._id, UserName: this.UserName, isAdmin: this.isAdmin },
+    `${process.env.JWT_TOKEN}`,
+    { expiresIn: "7d" },
+  );
+};
+function ValidateUser(User) {
+  const schema = joi.object({
+    Email: joi.string().min(5).max(100).trim().required().email(),
+    UserName: joi.string().min(3).max(100).trim().required(),
+    Password: passwordComplexity().required(),
+  });
+  const { error } = schema.validate(User);
+  return error;
+}
+function ValidateUpdateUser(User) {
+  const schema = joi.object({
+    Email: joi.string().min(5).trim().max(100),
+    UserName: joi.string().min(3).max(100).trim(),
+    Password: passwordComplexity().required(),
+  });
+  const { error } = schema.validate(User);
+  return error;
+}
+function ValidateLogin(User) {
+  const schema = joi.object({
+    Email: joi.string().min(5).max(100).trim(),
+    Password: joi.string().min(4).max(1000).trim(),
+  });
+  const { error } = schema.validate(User);
+  return error;
+}
+function ValidateChangePassword(User) {
+  console.log("the user is", User);
+  const schema = joi.object({
+    password: passwordComplexity().required(),
+  });
+  const { error } = schema.validate(User);
+  return error;
+}
+const User = mongoose.model("User", userschema);
+module.exports = {
+  User,
+  ValidateUser,
+  ValidateUpdateUser,
+  ValidateLogin,
+  ValidateChangePassword,
+};
+</file>
+
 <file path="routes/books.js">
 const express = require("express");
 const router = express.Router();
@@ -1300,14 +1357,21 @@ module.exports = router;
 // WORKING WITH EXPRESSJS
 const express = require("express");
 const app = express();
+const helmet = require("helmet");
+const cors = require("cors");
 // CALLING THE MIDDLEWARES
 const { notFound, errorhandler } = require("./middlewares/errors");
 const logger = require("./middlewares/logger");
+// CALLING URL ENCODED FOR READING DATA FROM THE FORM
 app.use(express.urlencoded({ extended: false }));
 // CONNECTING TO DP
 const connectToDB = require("./config/db");
 // WORKING WITH .ENV
 require("dotenv").config();
+// HELMET
+app.use(helmet());
+// CORS POLICY
+app.use(cors());
 
 // TRANSLATE THE REQUESTS TO JSON
 app.use(express.json());
@@ -1333,6 +1397,7 @@ app.use("/api/books", require("./routes/books"));
 app.use("/api/authors", require("./routes/authors"));
 app.use("/api/users", require("./routes/user"));
 app.use("/password", require("./routes/password"));
+app.use("/api/upload", require("./routes/upload"));
 
 // middlewares
 app.use(notFound);
@@ -1360,13 +1425,17 @@ app.listen(process.env.PORT, () => {
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",
+    "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "ejs": "^6.0.1",
     "express": "^5.2.1",
     "express-async-handler": "^1.2.0",
+    "helmet": "^8.3.0",
     "joi": "^18.0.1",
+    "joi-password-complexity": "^5.2.0",
     "jsonwebtoken": "^9.0.3",
     "mongoose": "^9.9.3",
+    "multer": "^2.2.0",
     "nodemailer": "^9.0.5"
   },
   "devDependencies": {
