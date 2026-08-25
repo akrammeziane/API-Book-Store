@@ -44,7 +44,6 @@ function validateAuthor(author) {
     nationality: joi.string().min(3).max(50).required(),
     image: joi.string().min(10).max(500),
   });
-  console.log("item", schema.validate(author));
   const { error } = schema.validate(author);
   return error;
 }

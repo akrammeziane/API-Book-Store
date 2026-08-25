@@ -4,6 +4,7 @@ const app = express();
 // CALLING THE MIDDLEWARES
 const { notFound, errorhandler } = require("./middlewares/errors");
 const logger = require("./middlewares/logger");
+app.use(express.urlencoded({ extended: false }));
 // CONNECTING TO DP
 const connectToDB = require("./config/db");
 // WORKING WITH .ENV
@@ -11,6 +12,13 @@ require("dotenv").config();
 
 // TRANSLATE THE REQUESTS TO JSON
 app.use(express.json());
+
+// MAKE THE PUBLIC FOLDER SERVABLE
+const path = require("path");
+
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+app.use(express.static(path.join(__dirname, "public")));
 
 // connecting to data base
 
@@ -25,6 +33,7 @@ app.use("/api/auth", require("./routes/auth"));
 app.use("/api/books", require("./routes/books"));
 app.use("/api/authors", require("./routes/authors"));
 app.use("/api/users", require("./routes/user"));
+app.use("/password", require("./routes/password"));
 
 // middlewares
 app.use(notFound);
