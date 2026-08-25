@@ -2,6 +2,8 @@ const asyncHandler = require("express-async-handler");
 const { User } = require("../Models/User");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
+const nodemailer = require("nodemailer");
+require("dotenv").config();
 
 /**
  * @desc Get forgot password page
@@ -31,10 +33,28 @@ const sendPassword = asyncHandler(async (req, res) => {
 
   const Link = `http://localhost:3000/password/reset-password/${user.id}/${token}`;
 
-  res.status(200).json({
-    message: "please follow the link to reset your password",
-    resetPasswordLink: Link,
+  //   res.status(200).json({
+  //     message: "please follow the link to reset your password",
+  //     resetPasswordLink: Link,
+  //   });
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.USER_GMAIL,
+      pass: process.env.USER_PASS.replace(/\s+/g, ""),
+    },
   });
+  const mailOptions = {
+    from: process.env.USER_GMAIL,
+    to: user.Email,
+    subject: "RESETING THE PASSWORD",
+    html: `<div>
+    <p>please following this link to reset your password </p>
+    <p>${Link}</p>
+    </div>`,
+  };
+  await transporter.sendMail(mailOptions);
+  res.render("Link-Page");
 });
 
 /**
