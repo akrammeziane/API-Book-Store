@@ -46,6 +46,7 @@ controllers/
   authcontroller.js
   authorscontroller.js
   bookscontroller.js
+  passwordController.js
   usercontroller.js
 middlewares/
   errors.js
@@ -55,11 +56,20 @@ Models/
   Authors.js
   Books.js
   User.js
+public/
+  output.css
+  styles.css
 routes/
   auth.js
   authors.js
   books.js
+  password.js
   user.js
+views/
+  forgot-password.ejs
+  Link-Page.ejs
+  reset-password.ejs
+  success-reset-password.ejs
 .gitignore
 app.js
 data.js
@@ -142,361 +152,6 @@ module.exports = {
 };
 </file>
 
-<file path="controllers/authorscontroller.js">
-const asyncHandler = require("express-async-handler");
-
-const {
-  Author,
-  validateAuthor,
-  validateUpdateAuthor,
-} = require("../Models/Authors");
-
-/**
- * @desc Get all authors
- * @route GET /api/authors
- * @access Public
- */
-
-const getAuthors = asyncHandler(async (req, res) => {
-  // PAGINATION
-  const { PageNumber } = req.query;
-  const AuthorPerPage = 2;
-  const skip = (PageNumber - 1) * AuthorPerPage;
-  const authorlists = await Author.find().skip(skip).limit(AuthorPerPage);
-  // .sort({ FirstName: -1 })
-  // .select("FirstName LastName -_id");
-  res.status(200).json(authorlists);
-});
-
-/**
- * @desc Get author by ID
- * @route GET /api/authors/:id
- * @access Public
- */
-
-const getAuthorById = asyncHandler(async (req, res) => {
-  const author = await Author.findById(req.params.id);
-  if (author) {
-    res.status(200).json(author);
-  } else {
-    res.status(404).json({ message: "author not found" });
-  }
-});
-/**
- * @desc Create a new author
- * @route POST /api/authors
- * @access Private(only admin)
- */
-
-const addAuthor = asyncHandler(async (req, res) => {
-  console.log(req.body);
-
-  const error = validateAuthor(req.body);
-  if (error) {
-    return res.status(400).send(error.details[0].message);
-  }
-  const author = new Author({
-    FirstName: req.body.FirstName,
-    LastName: req.body.LastName,
-    age: req.body.age,
-    nationality: req.body.nationality,
-    image: req.body.image,
-  });
-  const result = await author.save();
-  return res.status(201).json(result);
-});
-
-/**
- * @desc Edit an author by ID
- * @route PUT /api/authors/:id
- * @access Private (only admin)
- */
-
-const editAuthor = asyncHandler(async (req, res) => {
-  const error = validateUpdateAuthor(req.body);
-  if (error) {
-    return res.status(400).send(error.details[0].message);
-  }
-  const author = await Author.findByIdAndUpdate(
-    req.params.id,
-    {
-      $set: {
-        FirstName: req.body.FirstName,
-        LastName: req.body.LastName,
-        age: req.body.age,
-        nationality: req.body.nationality,
-        image: req.body.image,
-      },
-    },
-    { new: true },
-  );
-  res.status(200).json(author);
-});
-
-/**
- * @desc Delete an author by ID
- * @route DELETE /api/authors/:id
- * @access Private(ony admin)
- */
-
-const deleteAuthor = asyncHandler(async (req, res) => {
-  const author = await Author.findById(req.params.id);
-  if (author) {
-    await Author.findByIdAndDelete(req.params.id);
-    res.status(200).json({ message: "Author deleted successfully" });
-  } else {
-    res.status(404).json({ message: "Author not found" });
-  }
-});
-module.exports = {
-  getAuthors,
-  getAuthorById,
-  addAuthor,
-  editAuthor,
-  deleteAuthor,
-};
-</file>
-
-<file path="controllers/bookscontroller.js">
-const asyncHandler = require("express-async-handler");
-const { Book, validateBook, validateUpdateBook } = require("../Models/Books");
-
-/**
- * @desc Get all books
- * @route GET /api/books
- * @access Public
- */
-const getBooks = asyncHandler(async (req, res) => {
-  const { minPrice, maxPrice } = req.query;
-  let booksList = [];
-  if (minPrice || maxPrice) {
-    booksList = await Book.find({
-      price: { $gt: minPrice, $lt: maxPrice },
-    }).populate("author", ["_id", "FirstName", "LastName"]);
-  } else {
-    booksList = await Book.find().populate("author", [
-      "_id",
-      "FirstName",
-      "LastName",
-    ]);
-  }
-  res.status(200).json(booksList);
-});
-
-/**
- * @desc Get books by ID
- * @route GET /api/books/:id
- * @access Public
- */
-
-const getBookById = asyncHandler(async (req, res) => {
-  console.log("the request is", req);
-  console.log("the params is ", req.params);
-  const book = await Book.findById(req.params.id).populate("author");
-  if (book) {
-    res.status(200).json(book);
-  } else {
-    res.status(404).send("Book not found");
-  }
-});
-
-/**
- * @desc Create a new book
- * @route POST /api/books
- * @access Private(only admin)
- */
-
-const addBook = asyncHandler(async (req, res) => {
-  console.log(req.body);
-
-  const error = validateBook(req.body);
-  if (error) {
-    return res.status(400).send(error.details[0].message);
-  }
-  const book = new Book({
-    title: req.body.title,
-    author: req.body.author,
-    price: req.body.price,
-  });
-  const result = await book.save();
-  res.status(201).json(result);
-});
-
-/**
- * @desc Edit a book by ID
- * @route PUT /api/books/:id
- * @access Private(only admin)
- */
-const editBook = asyncHandler(async (req, res) => {
-  const error = validateUpdateBook(req.body);
-  if (error) {
-    return res.status(400).send(error.details[0].message);
-  }
-  const book = await Book.findByIdAndUpdate(
-    req.params.id,
-    {
-      $set: {
-        title: req.body.title,
-        author: req.body.author,
-        price: req.body.price,
-      },
-    },
-    { new: true },
-  );
-  console.log("the book is ", book);
-  res.status(200).json(book);
-});
-
-/**
- * @desc delete a book by ID
- * @route DELETE /api/books/:id
- * @access Private (only admin)
- */
-
-const deleteBook = asyncHandler(async (req, res) => {
-  const book = await Book.findById(req.params.id);
-  if (book) {
-    await Book.findByIdAndDelete(req.params.id);
-    res.status(200).send("Book deleted successfully");
-  } else {
-    res.status(404).send("Book not found");
-  }
-});
-module.exports = {
-  getBooks,
-  getBookById,
-  addBook,
-  editBook,
-  deleteBook,
-};
-</file>
-
-<file path="controllers/usercontroller.js">
-const asyncHandler = require("express-async-handler");
-const {
-  User,
-  ValidateUser,
-  ValidateUpdateUser,
-  ValidateLogin,
-} = require("../Models/User");
-
-/**
- * @desc : Get All Users
- * @route : GET /api/users
- * @access:Private(only for admin)
- */
-const getUsers = asyncHandler(async (req, res) => {
-  const UserList = await User.find().select("-Password");
-  res.status(200).json(UserList);
-});
-
-/**
- * @desc : Get Users By ID
- * @route : GET /api/users/:id
- * @access:Private(only for admin and current user)
- */
-
-const getUserById = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id).select("-Password");
-  if (user) {
-    res.status(200).json(user);
-  } else {
-    res.status(404).json({ message: "user not found" });
-  }
-});
-
-/**
- * @desc : Add an user
- * @route : Post /api/users/:id
- * @access:Public
- */
-// const addUser=()=>{
-//     asyncHandler(async (req, res) => {
-//     console.log(req.body);
-//     console.log(req.params);
-//     const error = ValidateUser(req.body);
-//     if (error) {
-//       return res.status(400).json(error.details[0].message);
-//     }
-//     const newUser = new User({
-//       Email: req.body.Email,
-//       UserName: req.body.UserName,
-//       Password: req.body.Password,
-//       isAdmin: req.body.isAdmin,
-//     });
-//     const result = await newUser.save();
-//     res.status(201).json(result);
-//   })
-// }
-
-/**
- * @desc : edit an user by id
- * @route : Put /api/users/:id
- * @access:Private(only for admin and current user)
- */
-
-const editUser = asyncHandler(async (req, res) => {
-  const error = ValidateUpdateUser(req.body);
-  if (error) {
-    return res.status(400).json(error.details[0].message);
-  }
-  const editedUser = await User.findByIdAndUpdate(
-    req.params.id,
-    {
-      $set: {
-        Email: req.body.Email,
-        UserName: req.body.UserName,
-        Password: req.body.Password,
-        isAdmin: req.body.isAdmin,
-      },
-    },
-    { new: true },
-  ).select("-Password");
-  res.status(201).json(editedUser);
-});
-/**
- * @desc : delete an user by id
- * @route : Delete /api/users/:id
- * @access:Private(only for admin and current user)
- */
-const deleteUser = asyncHandler(async (req, res) => {
-  const user = await User.findById(req.params.id);
-  if (user) {
-    await User.findByIdAndDelete(req.params.id);
-    res.status(200).json({
-      message: `User with name ${user.UserName} and id : ${req.params.id} deleted sucsessfully`,
-    });
-  } else {
-    res.status(400).json({ message: "User not found !" });
-  }
-});
-module.exports = {
-  getUsers,
-  getUserById,
-  editUser,
-  deleteUser,
-};
-</file>
-
-<file path="middlewares/errors.js">
-const notFound = (req, res, next) => {
-  const error = new Error(`Not Found : ${req.originalUrl}`);
-  res.status(404);
-  next(error);
-};
-
-const errorhandler = (err, req, res, next) => {
-  console.log(res.statusCode);
-  const statuscode = res.statusCode === 200 ? 500 : res.statusCode;
-  console.log(statuscode);
-  res.status(statuscode).json({ message: err.message });
-};
-module.exports = {
-  notFound,
-  errorhandler,
-};
-</file>
-
 <file path="middlewares/logger.js">
 const logger = (req, res, next) => {
   console.log(
@@ -507,72 +162,151 @@ const logger = (req, res, next) => {
 module.exports = logger;
 </file>
 
-<file path="Models/Authors.js">
-const mongoose = require("mongoose");
-const joi = require("joi");
-const Authorschema = new mongoose.Schema(
-  {
-    FirstName: {
-      type: String,
-      minlength: 3,
-      maxlength: 50,
-      required: true,
-    },
-    LastName: {
-      type: String,
-      minlength: 3,
-      maxlength: 50,
-      required: true,
-    },
-    age: {
-      type: Number,
-      min: 0,
-      max: 120,
-      required: true,
-    },
-    nationality: {
-      type: String,
-      minlength: 3,
-      maxlength: 50,
-      required: true,
-    },
-    image: {
-      type: String,
-      minlength: 10,
-      maxlength: 500,
-      default:
-        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8YXV0aG9yfGVufDB8fDB8fHww&w=1000&q=80",
-    },
-  },
-  { timestamps: true },
-);
-function validateAuthor(author) {
-  const schema = joi.object({
-    FirstName: joi.string().min(3).max(50).required(),
-    LastName: joi.string().min(3).max(50).required(),
-    age: joi.number().min(0).max(120).required(),
-    nationality: joi.string().min(3).max(50).required(),
-    image: joi.string().min(10).max(500),
-  });
-  console.log("item", schema.validate(author));
-  const { error } = schema.validate(author);
-  return error;
-}
-function validateUpdateAuthor(author) {
-  const schema = joi.object({
-    FirstName: joi.string().min(3).max(50),
-    LastName: joi.string().min(3).max(50),
-    age: joi.number().min(0).max(120),
-    nationality: joi.string().min(3).max(50),
-    image: joi.string().min(10).max(500),
-  });
-  const { error } = schema.validate(author);
-  return error;
-}
+<file path="public/output.css">
+/*! tailwindcss v4.3.3 | MIT License | https://tailwindcss.com */
+@layer properties{@supports (((-webkit-hyphens:none)) and (not (margin-trim:inline))) or ((-moz-orient:inline) and (not (color:rgb(from red r g b)))){*,:before,:after,::backdrop{--tw-border-style:solid;--tw-font-weight:initial;--tw-shadow:0 0 #0000;--tw-shadow-color:initial;--tw-shadow-alpha:100%;--tw-inset-shadow:0 0 #0000;--tw-inset-shadow-color:initial;--tw-inset-shadow-alpha:100%;--tw-ring-color:initial;--tw-ring-shadow:0 0 #0000;--tw-inset-ring-color:initial;--tw-inset-ring-shadow:0 0 #0000;--tw-ring-inset:initial;--tw-ring-offset-width:0px;--tw-ring-offset-color:#fff;--tw-ring-offset-shadow:0 0 #0000}}}@layer theme{:root,:host{--font-sans:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";--font-mono:ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;--color-amber-500:oklch(76.9% .188 70.08);--color-green-500:oklch(72.3% .219 149.579);--color-cyan-50:oklch(98.4% .019 200.873);--color-cyan-300:oklch(86.5% .127 207.078);--spacing:.25rem;--text-3xl:1.875rem;--text-3xl--line-height:calc(2.25 / 1.875);--font-weight-bold:700;--radius-lg:.5rem;--radius-2xl:1rem;--default-font-family:var(--font-sans);--default-mono-font-family:var(--font-mono)}}@layer base{*,:after,:before,::backdrop{box-sizing:border-box;border:0 solid;margin:0;padding:0}::file-selector-button{box-sizing:border-box;border:0 solid;margin:0;padding:0}html,:host{-webkit-text-size-adjust:100%;tab-size:4;line-height:1.5;font-family:var(--default-font-family,-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", "Noto Sans", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji");font-feature-settings:var(--default-font-feature-settings,normal);font-variation-settings:var(--default-font-variation-settings,normal);-webkit-tap-highlight-color:transparent}hr{height:0;color:inherit;border-top-width:1px}abbr:where([title]){-webkit-text-decoration:underline dotted;text-decoration:underline dotted}h1,h2,h3,h4,h5,h6{font-size:inherit;font-weight:inherit}a{color:inherit;-webkit-text-decoration:inherit;-webkit-text-decoration:inherit;-webkit-text-decoration:inherit;text-decoration:inherit}b,strong{font-weight:bolder}code,kbd,samp,pre{font-family:var(--default-mono-font-family,ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace);font-feature-settings:var(--default-mono-font-feature-settings,normal);font-variation-settings:var(--default-mono-font-variation-settings,normal);font-size:1em}small{font-size:80%}sub,sup{vertical-align:baseline;font-size:75%;line-height:0;position:relative}sub{bottom:-.25em}sup{top:-.5em}table{text-indent:0;border-color:inherit;border-collapse:collapse}:-moz-focusring:where(:not(iframe)){outline:auto}progress{vertical-align:baseline}summary{display:list-item}ol,ul,menu{list-style:none}img,svg,video,canvas,audio,iframe,embed,object{vertical-align:middle;display:block}img,video{max-width:100%;height:auto}button,input,select,optgroup,textarea{font:inherit;font-feature-settings:inherit;font-variation-settings:inherit;letter-spacing:inherit;color:inherit;opacity:1;background-color:#0000;border-radius:0}::file-selector-button{font:inherit;font-feature-settings:inherit;font-variation-settings:inherit;letter-spacing:inherit;color:inherit;opacity:1;background-color:#0000;border-radius:0}:where(select:is([multiple],[size])) optgroup{font-weight:bolder}:where(select:is([multiple],[size])) optgroup option{padding-inline-start:20px}::file-selector-button{margin-inline-end:4px}::placeholder{opacity:1}@supports (not ((-webkit-appearance:-apple-pay-button))) or (contain-intrinsic-size:1px){::placeholder{color:currentColor}@supports (color:color-mix(in lab, red, red)){::placeholder{color:color-mix(in oklab, currentcolor 50%, transparent)}}}textarea{resize:vertical}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-date-and-time-value{min-height:1lh;text-align:inherit}::-webkit-datetime-edit{display:inline-flex}::-webkit-datetime-edit-fields-wrapper{padding:0}::-webkit-datetime-edit{padding-block:0}::-webkit-datetime-edit-year-field{padding-block:0}::-webkit-datetime-edit-month-field{padding-block:0}::-webkit-datetime-edit-day-field{padding-block:0}::-webkit-datetime-edit-hour-field{padding-block:0}::-webkit-datetime-edit-minute-field{padding-block:0}::-webkit-datetime-edit-second-field{padding-block:0}::-webkit-datetime-edit-millisecond-field{padding-block:0}::-webkit-datetime-edit-meridiem-field{padding-block:0}::-webkit-calendar-picker-indicator{line-height:1}:-moz-ui-invalid{box-shadow:none}button,input:where([type=button],[type=reset],[type=submit]){appearance:button}::file-selector-button{appearance:button}::-webkit-inner-spin-button{height:auto}::-webkit-outer-spin-button{height:auto}[hidden]:where(:not([hidden=until-found])){display:none!important}}@layer components;@layer utilities{.mt-2{margin-top:calc(var(--spacing) * 2)}.contents{display:contents}.flex{display:flex}.h-\[400px\]{height:400px}.h-screen{height:100vh}.w-\[400px\]{width:400px}.w-full{width:100%}.w-screen{width:100vw}.flex-col{flex-direction:column}.items-center{align-items:center}.justify-center{justify-content:center}.rounded-2xl{border-radius:var(--radius-2xl)}.rounded-lg{border-radius:var(--radius-lg)}.border{border-style:var(--tw-border-style);border-width:1px}.border-0{border-style:var(--tw-border-style);border-width:0}.bg-cyan-50{background-color:var(--color-cyan-50)}.bg-cyan-300{background-color:var(--color-cyan-300)}.bg-green-500{background-color:var(--color-green-500)}.p-2{padding:calc(var(--spacing) * 2)}.text-center{text-align:center}.text-left{text-align:left}.text-3xl{font-size:var(--text-3xl);line-height:var(--tw-leading,var(--text-3xl--line-height))}.font-bold{--tw-font-weight:var(--font-weight-bold);font-weight:var(--font-weight-bold)}.text-amber-500{color:var(--color-amber-500)}.shadow-md{--tw-shadow:0 4px 6px -1px var(--tw-shadow-color,#0000001a), 0 2px 4px -2px var(--tw-shadow-color,#0000001a);box-shadow:var(--tw-inset-shadow), var(--tw-inset-ring-shadow), var(--tw-ring-offset-shadow), var(--tw-ring-shadow), var(--tw-shadow)}}@property --tw-border-style{syntax:"*";inherits:false;initial-value:solid}@property --tw-font-weight{syntax:"*";inherits:false}@property --tw-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-shadow-color{syntax:"*";inherits:false}@property --tw-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --tw-inset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-inset-shadow-color{syntax:"*";inherits:false}@property --tw-inset-shadow-alpha{syntax:"<percentage>";inherits:false;initial-value:100%}@property --tw-ring-color{syntax:"*";inherits:false}@property --tw-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-inset-ring-color{syntax:"*";inherits:false}@property --tw-inset-ring-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}@property --tw-ring-inset{syntax:"*";inherits:false}@property --tw-ring-offset-width{syntax:"<length>";inherits:false;initial-value:0}@property --tw-ring-offset-color{syntax:"*";inherits:false;initial-value:#fff}@property --tw-ring-offset-shadow{syntax:"*";inherits:false;initial-value:0 0 #0000}
+</file>
 
-const Author = mongoose.model("Author", Authorschema);
+<file path="public/styles.css">
+@import "tailwindcss";
+</file>
 
-module.exports = { Author, validateAuthor, validateUpdateAuthor };
+<file path="routes/password.js">
+const express = require("express");
+const router = express.Router();
+
+const {
+  getForgotPassword,
+  sendPassword,
+  getResetPasswordView,
+  resetPassword,
+} = require("../controllers/passwordController");
+
+router.route("/forgot-password").get(getForgotPassword).post(sendPassword);
+router
+  .route("/reset-password/:id/:token")
+  .get(getResetPasswordView)
+  .post(resetPassword);
+
+module.exports = router;
+</file>
+
+<file path="views/forgot-password.ejs">
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>forgot Password</title>
+    <link rel="stylesheet" href="/output.css" />
+  </head>
+  <body>
+    <div
+      class="flex flex-col justify-center items-center w-screen h-screen bg-cyan-300"
+    >
+      <form
+        class="flex flex-col bg-cyan-50 border-0 justify-center rounded-lg shadow-md w-[400px] h-[400px]"
+        method="post"
+        action=""
+      >
+        <h1 class="font-bold text-3xl text-amber-500 text-center">
+          Forgot Password
+        </h1>
+        <label class="text-left" for="email">Email:</label>
+        <input
+          class="border rounded-2xl w-full"
+          type="email"
+          id="email"
+          name="email"
+        />
+        <input
+          type="submit"
+          class="bg-green-500 rounded-lg p-2 shadow-md mt-2"
+          value="submit"
+        />
+      </form>
+    </div>
+  </body>
+</html>
+</file>
+
+<file path="views/Link-Page.ejs">
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sucessefully Reseting</title>
+  </head>
+  <body>
+    <div
+      class="flex flex-col justify-center items-center w-screen h-screen bg-cyan-300"
+    >
+      <div class="bg-amber-50 rounded-lg">
+        <h1>check your Email</h1>
+      </div>
+    </div>
+  </body>
+</html>
+</file>
+
+<file path="views/reset-password.ejs">
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reset Password</title>
+    <link rel="stylesheet" href="/output.css" />
+  </head>
+  <body>
+    <div
+      class="flex flex-col justify-center items-center w-screen h-screen bg-cyan-300"
+    >
+      <form
+        class="flex flex-col bg-cyan-50 border-0 justify-center rounded-lg shadow-md w-[400px] h-[400px]"
+        method="post"
+        action=""
+      >
+        <h1 class="font-bold text-3xl text-amber-500 text-center">
+          Reset Password <%= email %>
+        </h1>
+        <label class="text-left" for="password">Password:</label>
+        <input
+          class="border rounded-2xl w-full"
+          type="password"
+          id="password"
+          name="password"
+        />
+        <input
+          type="submit"
+          class="bg-green-500 rounded-lg p-2 shadow-md mt-2"
+          value="submit"
+        />
+      </form>
+    </div>
+  </body>
+</html>
+</file>
+
+<file path="views/success-reset-password.ejs">
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sucessefully Reseting</title>
+  </head>
+  <body>
+    <div
+      class="flex flex-col justify-center items-center w-screen h-screen bg-cyan-300"
+    >
+      <div class="bg-amber-50 rounded-lg">
+        <h1>you secessfully reseting the password</h1>
+      </div>
+    </div>
+  </body>
+</html>
 </file>
 
 <file path=".gitignore">
@@ -744,6 +478,473 @@ module.exports = connectToDB;
 //   });
 </file>
 
+<file path="controllers/authorscontroller.js">
+const asyncHandler = require("express-async-handler");
+
+const {
+  Author,
+  validateAuthor,
+  validateUpdateAuthor,
+} = require("../Models/Authors");
+
+/**
+ * @desc Get all authors
+ * @route GET /api/authors
+ * @access Public
+ */
+
+const getAuthors = asyncHandler(async (req, res) => {
+  // PAGINATION
+  const PageNumber = parseInt(req.query.PageNumber) || 1;
+  const AuthorPerPage = 2;
+  const skip = (PageNumber - 1) * AuthorPerPage;
+  const authorlists = await Author.find().skip(skip).limit(AuthorPerPage);
+  // .sort({ FirstName: -1 })
+  // .select("FirstName LastName -_id");
+  res.status(200).json(authorlists);
+});
+
+/**
+ * @desc Get author by ID
+ * @route GET /api/authors/:id
+ * @access Public
+ */
+
+const getAuthorById = asyncHandler(async (req, res) => {
+  const author = await Author.findById(req.params.id);
+  if (author) {
+    res.status(200).json(author);
+  } else {
+    res.status(404).json({ message: "author not found" });
+  }
+});
+/**
+ * @desc Create a new author
+ * @route POST /api/authors
+ * @access Private(only admin)
+ */
+
+const addAuthor = asyncHandler(async (req, res) => {
+  console.log(req.body);
+
+  const error = validateAuthor(req.body);
+  if (error) {
+    return res.status(400).send(error.details[0].message);
+  }
+  const author = new Author({
+    FirstName: req.body.FirstName,
+    LastName: req.body.LastName,
+    age: req.body.age,
+    nationality: req.body.nationality,
+    image: req.body.image,
+  });
+  const result = await author.save();
+  return res.status(201).json(result);
+});
+
+/**
+ * @desc Edit an author by ID
+ * @route PUT /api/authors/:id
+ * @access Private (only admin)
+ */
+
+const editAuthor = asyncHandler(async (req, res) => {
+  const error = validateUpdateAuthor(req.body);
+  if (error) {
+    return res.status(400).send(error.details[0].message);
+  }
+  const author = await Author.findByIdAndUpdate(
+    req.params.id,
+    {
+      $set: {
+        FirstName: req.body.FirstName,
+        LastName: req.body.LastName,
+        age: req.body.age,
+        nationality: req.body.nationality,
+        image: req.body.image,
+      },
+    },
+    { new: true },
+  );
+  res.status(200).json(author);
+});
+
+/**
+ * @desc Delete an author by ID
+ * @route DELETE /api/authors/:id
+ * @access Private(ony admin)
+ */
+
+const deleteAuthor = asyncHandler(async (req, res) => {
+  const author = await Author.findById(req.params.id);
+  if (author) {
+    await Author.findByIdAndDelete(req.params.id);
+    res.status(200).json({ message: "Author deleted successfully" });
+  } else {
+    res.status(404).json({ message: "Author not found" });
+  }
+});
+module.exports = {
+  getAuthors,
+  getAuthorById,
+  addAuthor,
+  editAuthor,
+  deleteAuthor,
+};
+</file>
+
+<file path="controllers/bookscontroller.js">
+const asyncHandler = require("express-async-handler");
+const { Book, validateBook, validateUpdateBook } = require("../Models/Books");
+
+/**
+ * @desc Get all books
+ * @route GET /api/books
+ * @access Public
+ */
+const getBooks = asyncHandler(async (req, res) => {
+  const { minPrice, maxPrice } = req.query;
+  let booksList = [];
+  if (minPrice || maxPrice) {
+    booksList = await Book.find({
+      price: { $gt: parseFloat(minPrice), $lt: parseFloat(maxPrice) },
+    }).populate("author", ["_id", "FirstName", "LastName"]);
+  } else {
+    booksList = await Book.find().populate("author", [
+      "_id",
+      "FirstName",
+      "LastName",
+    ]);
+  }
+  res.status(200).json(booksList);
+});
+
+/**
+ * @desc Get books by ID
+ * @route GET /api/books/:id
+ * @access Public
+ */
+
+const getBookById = asyncHandler(async (req, res) => {
+  console.log("the request is", req);
+  console.log("the params is ", req.params);
+  const book = await Book.findById(req.params.id).populate("author");
+  if (book) {
+    res.status(200).json(book);
+  } else {
+    res.status(404).send("Book not found");
+  }
+});
+
+/**
+ * @desc Create a new book
+ * @route POST /api/books
+ * @access Private(only admin)
+ */
+
+const addBook = asyncHandler(async (req, res) => {
+  console.log(req.body);
+
+  const error = validateBook(req.body);
+  if (error) {
+    return res.status(400).send(error.details[0].message);
+  }
+  const book = new Book({
+    title: req.body.title,
+    author: req.body.author,
+    price: req.body.price,
+  });
+  const result = await book.save();
+  res.status(201).json(result);
+});
+
+/**
+ * @desc Edit a book by ID
+ * @route PUT /api/books/:id
+ * @access Private(only admin)
+ */
+const editBook = asyncHandler(async (req, res) => {
+  const error = validateUpdateBook(req.body);
+  if (error) {
+    return res.status(400).send(error.details[0].message);
+  }
+  const book = await Book.findByIdAndUpdate(
+    req.params.id,
+    {
+      $set: {
+        title: req.body.title,
+        author: req.body.author,
+        price: req.body.price,
+      },
+    },
+    { new: true },
+  );
+  console.log("the book is ", book);
+  res.status(200).json(book);
+});
+
+/**
+ * @desc delete a book by ID
+ * @route DELETE /api/books/:id
+ * @access Private (only admin)
+ */
+
+const deleteBook = asyncHandler(async (req, res) => {
+  const book = await Book.findById(req.params.id);
+  if (book) {
+    await Book.findByIdAndDelete(req.params.id);
+    res.status(200).send("Book deleted successfully");
+  } else {
+    res.status(404).send("Book not found");
+  }
+});
+module.exports = {
+  getBooks,
+  getBookById,
+  addBook,
+  editBook,
+  deleteBook,
+};
+</file>
+
+<file path="controllers/passwordController.js">
+const asyncHandler = require("express-async-handler");
+const { User } = require("../Models/User");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs");
+const nodemailer = require("nodemailer");
+require("dotenv").config();
+
+/**
+ * @desc Get forgot password page
+ * @route GET /password/forgot-password
+ * @access Public
+ */
+
+const getForgotPassword = asyncHandler((req, res) => {
+  return res.render("forgot-password");
+});
+
+/**
+ * @desc send the new password
+ * @route POST /password/forgot-password
+ * @access Public
+ */
+
+const sendPassword = asyncHandler(async (req, res) => {
+  const user = await User.findOne({ Email: req.body.email });
+  if (!user) {
+    return res.status(404).json({ message: "User not Found" });
+  }
+  const secret = process.env.JWT_TOKEN + user.Password;
+  const token = jwt.sign({ Email: user.Email, id: user.id }, secret, {
+    expiresIn: "10m",
+  });
+
+  const Link = `http://localhost:3000/password/reset-password/${user.id}/${token}`;
+
+  //   res.status(200).json({
+  //     message: "please follow the link to reset your password",
+  //     resetPasswordLink: Link,
+  //   });
+  const transporter = nodemailer.createTransport({
+    service: "gmail",
+    auth: {
+      user: process.env.USER_GMAIL,
+      pass: process.env.USER_PASS.replace(/\s+/g, ""),
+    },
+  });
+  const mailOptions = {
+    from: process.env.USER_GMAIL,
+    to: user.Email,
+    subject: "RESETING THE PASSWORD",
+    html: `<div>
+    <p>please following this link to reset your password </p>
+    <p>${Link}</p>
+    </div>`,
+  };
+  await transporter.sendMail(mailOptions);
+  res.render("Link-Page");
+});
+
+/**
+ * @desc Get the reset password view
+ * @route GET /password/reset-password
+ * @access Public
+ */
+
+const getResetPasswordView = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return res.status(404).json({ message: "User not Found" });
+  }
+  const secret = process.env.JWT_TOKEN + user.Password;
+  try {
+    jwt.verify(req.params.token, secret);
+    res.render("reset-password", { email: user.Email });
+  } catch (err) {
+    res.status(400).json({ message: "Error occcured" });
+  }
+});
+
+/**
+ * @desc Seding the new password
+ * @route POST /password/reset-password
+ * @access Public
+ */
+
+const resetPassword = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (!user) {
+    return res.status(404).json({ message: "User not Found" });
+  }
+  const secret = process.env.JWT_TOKEN + user.Password;
+  console.log("the password is ", req.body.password);
+  try {
+    jwt.verify(req.params.token, secret);
+    const salt = await bcrypt.genSalt(10);
+    const NewPassword = await bcrypt.hash(req.body.password, salt);
+    user.Password = NewPassword;
+    await user.save();
+    res.render("success-reset-password");
+  } catch (error) {
+    console.log(error);
+    res.status(400).json({ message: "Error" });
+  }
+});
+
+module.exports = {
+  getForgotPassword,
+  sendPassword,
+  getResetPasswordView,
+  resetPassword,
+};
+</file>
+
+<file path="controllers/usercontroller.js">
+const asyncHandler = require("express-async-handler");
+const {
+  User,
+  ValidateUser,
+  ValidateUpdateUser,
+  ValidateLogin,
+} = require("../Models/User");
+
+/**
+ * @desc : Get All Users
+ * @route : GET /api/users
+ * @access:Private(only for admin)
+ */
+const getUsers = asyncHandler(async (req, res) => {
+  const UserList = await User.find().select("-Password");
+  res.status(200).json(UserList);
+});
+
+/**
+ * @desc : Get Users By ID
+ * @route : GET /api/users/:id
+ * @access:Private(only for admin and current user)
+ */
+
+const getUserById = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id).select("-Password");
+  if (user) {
+    res.status(200).json(user);
+  } else {
+    res.status(404).json({ message: "user not found" });
+  }
+});
+
+/**
+ * @desc : Add an user
+ * @route : Post /api/users/:id
+ * @access:Public
+ */
+// const addUser=()=>{
+//     asyncHandler(async (req, res) => {
+//     console.log(req.body);
+//     console.log(req.params);
+//     const error = ValidateUser(req.body);
+//     if (error) {
+//       return res.status(400).json(error.details[0].message);
+//     }
+//     const newUser = new User({
+//       Email: req.body.Email,
+//       UserName: req.body.UserName,
+//       Password: req.body.Password,
+//       isAdmin: req.body.isAdmin,
+//     });
+//     const result = await newUser.save();
+//     res.status(201).json(result);
+//   })
+// }
+
+/**
+ * @desc : edit an user by id
+ * @route : Put /api/users/:id
+ * @access:Private(only for admin and current user)
+ */
+
+const editUser = asyncHandler(async (req, res) => {
+  const error = ValidateUpdateUser(req.body);
+  if (error) {
+    return res.status(400).json(error.details[0].message);
+  }
+  const editedUser = await User.findByIdAndUpdate(
+    req.params.id,
+    {
+      $set: {
+        Email: req.body.Email,
+        UserName: req.body.UserName,
+        Password: req.body.Password,
+        isAdmin: req.body.isAdmin,
+      },
+    },
+    { new: true },
+  ).select("-Password");
+  res.status(200).json(editedUser);
+});
+/**
+ * @desc : delete an user by id
+ * @route : Delete /api/users/:id
+ * @access:Private(only for admin and current user)
+ */
+const deleteUser = asyncHandler(async (req, res) => {
+  const user = await User.findById(req.params.id);
+  if (user) {
+    await User.findByIdAndDelete(req.params.id);
+    res.status(200).json({
+      message: `User with name ${user.UserName} and id : ${req.params.id} deleted sucsessfully`,
+    });
+  } else {
+    res.status(404).json({ message: "User not found !" });
+  }
+});
+module.exports = {
+  getUsers,
+  getUserById,
+  editUser,
+  deleteUser,
+};
+</file>
+
+<file path="middlewares/errors.js">
+const notFound = (req, res, next) => {
+  const error = new Error(`Not Found : ${req.originalUrl}`);
+  res.status(404);
+  next(error);
+};
+
+const errorhandler = (err, req, res, next) => {
+  const statuscode = res.statusCode === 200 ? 500 : res.statusCode;
+  res.status(statuscode).json({ message: err.message });
+};
+module.exports = {
+  notFound,
+  errorhandler,
+};
+</file>
+
 <file path="middlewares/verifytoken.js">
 const jwt = require("jsonwebtoken");
 //VERIFY TOKEN
@@ -788,6 +989,73 @@ const verifyAdmin = (req, res, next) => {
 };
 
 module.exports = { verifyAuthAndAdmin, verifyAdmin };
+</file>
+
+<file path="Models/Authors.js">
+const mongoose = require("mongoose");
+const joi = require("joi");
+const Authorschema = new mongoose.Schema(
+  {
+    FirstName: {
+      type: String,
+      minlength: 3,
+      maxlength: 50,
+      required: true,
+    },
+    LastName: {
+      type: String,
+      minlength: 3,
+      maxlength: 50,
+      required: true,
+    },
+    age: {
+      type: Number,
+      min: 0,
+      max: 120,
+      required: true,
+    },
+    nationality: {
+      type: String,
+      minlength: 3,
+      maxlength: 50,
+      required: true,
+    },
+    image: {
+      type: String,
+      minlength: 10,
+      maxlength: 500,
+      default:
+        "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxzZWFyY2h8M3x8YXV0aG9yfGVufDB8fDB8fHww&w=1000&q=80",
+    },
+  },
+  { timestamps: true },
+);
+function validateAuthor(author) {
+  const schema = joi.object({
+    FirstName: joi.string().min(3).max(50).required(),
+    LastName: joi.string().min(3).max(50).required(),
+    age: joi.number().min(0).max(120).required(),
+    nationality: joi.string().min(3).max(50).required(),
+    image: joi.string().min(10).max(500),
+  });
+  const { error } = schema.validate(author);
+  return error;
+}
+function validateUpdateAuthor(author) {
+  const schema = joi.object({
+    FirstName: joi.string().min(3).max(50),
+    LastName: joi.string().min(3).max(50),
+    age: joi.number().min(0).max(120),
+    nationality: joi.string().min(3).max(50),
+    image: joi.string().min(10).max(500),
+  });
+  const { error } = schema.validate(author);
+  return error;
+}
+
+const Author = mongoose.model("Author", Authorschema);
+
+module.exports = { Author, validateAuthor, validateUpdateAuthor };
 </file>
 
 <file path="Models/Books.js">
@@ -838,34 +1106,6 @@ function validateUpdateBook(book) {
 const Book = mongoose.model("Book", BookSchema);
 
 module.exports = { Book, validateBook, validateUpdateBook };
-</file>
-
-<file path="package.json">
-{
-  "name": "book-store-api",
-  "version": "1.0.0",
-  "description": "",
-  "license": "ISC",
-  "author": "",
-  "type": "commonjs",
-  "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "nodemon app.js"
-  },
-  "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "dotenv": "^17.4.2",
-    "express": "^5.2.1",
-    "express-async-handler": "^1.2.0",
-    "joi": "^18.0.1",
-    "jsonwebtoken": "^9.0.3",
-    "mongoose": "^9.9.3"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.14"
-  }
-}
 </file>
 
 <file path="Models/User.js">
@@ -1028,46 +1268,6 @@ router
 module.exports = router;
 </file>
 
-<file path="app.js">
-// WORKING WITH EXPRESSJS
-const express = require("express");
-const app = express();
-// CALLING THE MIDDLEWARES
-const { notFound, errorhandler } = require("./middlewares/errors");
-const logger = require("./middlewares/logger");
-// CONNECTING TO DP
-const connectToDB = require("./config/db");
-// WORKING WITH .ENV
-require("dotenv").config();
-
-// TRANSLATE THE REQUESTS TO JSON
-app.use(express.json());
-
-// connecting to data base
-
-connectToDB();
-
-// LOGGER
-
-app.use(logger);
-
-// Routes
-app.use("/api/auth", require("./routes/auth"));
-app.use("/api/books", require("./routes/books"));
-app.use("/api/authors", require("./routes/authors"));
-app.use("/api/users", require("./routes/user"));
-
-// middlewares
-app.use(notFound);
-app.use(errorhandler);
-//Run the server
-app.listen(process.env.PORT, () => {
-  console.log(
-    `Server is running on ${process.env.NODE_ENV} in  on port ${process.env.PORT}`,
-  );
-});
-</file>
-
 <file path="routes/books.js">
 const express = require("express");
 const router = express.Router();
@@ -1094,6 +1294,87 @@ router
   .delete(verifyAdmin, deleteBook);
 
 module.exports = router;
+</file>
+
+<file path="app.js">
+// WORKING WITH EXPRESSJS
+const express = require("express");
+const app = express();
+// CALLING THE MIDDLEWARES
+const { notFound, errorhandler } = require("./middlewares/errors");
+const logger = require("./middlewares/logger");
+app.use(express.urlencoded({ extended: false }));
+// CONNECTING TO DP
+const connectToDB = require("./config/db");
+// WORKING WITH .ENV
+require("dotenv").config();
+
+// TRANSLATE THE REQUESTS TO JSON
+app.use(express.json());
+
+// MAKE THE PUBLIC FOLDER SERVABLE
+const path = require("path");
+
+app.set("view engine", "ejs");
+app.set("views", path.join(__dirname, "views"));
+app.use(express.static(path.join(__dirname, "public")));
+
+// connecting to data base
+
+connectToDB();
+
+// LOGGER
+
+app.use(logger);
+
+// Routes
+app.use("/api/auth", require("./routes/auth"));
+app.use("/api/books", require("./routes/books"));
+app.use("/api/authors", require("./routes/authors"));
+app.use("/api/users", require("./routes/user"));
+app.use("/password", require("./routes/password"));
+
+// middlewares
+app.use(notFound);
+app.use(errorhandler);
+//Run the server
+app.listen(process.env.PORT, () => {
+  console.log(
+    `Server is running on ${process.env.NODE_ENV} in  on port ${process.env.PORT}`,
+  );
+});
+</file>
+
+<file path="package.json">
+{
+  "name": "book-store-api",
+  "version": "1.0.0",
+  "description": "",
+  "license": "ISC",
+  "author": "",
+  "type": "commonjs",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "nodemon app.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^3.0.3",
+    "dotenv": "^17.4.2",
+    "ejs": "^6.0.1",
+    "express": "^5.2.1",
+    "express-async-handler": "^1.2.0",
+    "joi": "^18.0.1",
+    "jsonwebtoken": "^9.0.3",
+    "mongoose": "^9.9.3",
+    "nodemailer": "^9.0.5"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4.3.3",
+    "nodemon": "^3.1.14",
+    "tailwindcss": "^4.3.3"
+  }
+}
 </file>
 
 </files>

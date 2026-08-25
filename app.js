@@ -34,6 +34,7 @@ app.use("/api/books", require("./routes/books"));
 app.use("/api/authors", require("./routes/authors"));
 app.use("/api/users", require("./routes/user"));
 app.use("/password", require("./routes/password"));
+app.use("/api/upload", require("./routes/upload"));
 
 // middlewares
 app.use(notFound);
